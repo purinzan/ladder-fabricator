@@ -6,6 +6,7 @@ A connection has its own ID and path; drawing does not invent connections.
 from __future__ import annotations
 
 from .model import Circuit, Expr, condition
+from .target import TargetProfile, profile_from_id, target_json
 
 # Calibrated against the ladder-editor figure in GX Works3 Operating Manual
 # SH-081215ENG-AS, p.369. These are SVG/CSS pixels for the reference profile;
@@ -36,9 +37,10 @@ def extent(expr: Expr) -> tuple[int, int]:
 
 
 class Builder:
-    def __init__(self, comments: dict[str, str], y_offset: int):
+    def __init__(self, comments: dict[str, str], y_offset: int, profile: TargetProfile):
         self.comments = comments
         self.y_offset = y_offset
+        self.profile = profile
         self.nodes: dict[str, dict] = {}
         self.positions: dict[str, dict] = {}
         self.connections: list[dict] = []
@@ -93,7 +95,8 @@ class Builder:
             child = expr.args[0]
             entry, exit_node = self.place(child, x, y)
             width, _ = extent(child)
-            inverter = self.add(expr.id, "inverter", x + width + 0.5, y, opcode="INV")
+            inverter = self.add(expr.id, "inverter", x + width + 0.5, y,
+                                opcode=self.profile.inverter_opcode)
             self.connect(exit_node, inverter)
             return entry, inverter
         if expr.op == "and":
@@ -120,6 +123,7 @@ class Builder:
 
 def build_bundle(circuit: Circuit) -> dict:
     """Derived graph + SVG geometry + conditions; never a second editable truth."""
+    profile = profile_from_id(circuit.target)
     rung_widths = [extent(rung.logic)[0] for rung in circuit.rungs]
     has_instruction = any(rung.output_type != "coil" for rung in circuit.rungs)
     columns = max(rung_widths) + (4 if has_instruction else 3)
@@ -128,10 +132,10 @@ def build_bundle(circuit: Circuit) -> dict:
     comments = dict(circuit.comments)
     for rung in circuit.rungs:
         _, height = extent(rung.logic)
-        builder = Builder(comments, offset)
+        builder = Builder(comments, offset, profile)
         left = builder.add(rung.id + ":left", "left_rail", 0, 0)
         entry, exit_node = builder.place(rung.logic, 1, 0)
-        opcode = {"coil": "OUT", "set": "SET", "rst": "RST", "pls": "PLS"}[rung.output_type]
+        opcode = profile.output_opcodes[rung.output_type]
         output_kind = "coil" if rung.output_type == "coil" else "instruction"
         output_x = columns - (1 if output_kind == "instruction" else 0.5)
         coil = builder.add(rung.id + ":output", output_kind, output_x, 0,
@@ -167,6 +171,7 @@ def build_bundle(circuit: Circuit) -> dict:
         offset += HEADER_H + height * CELL_H + FOOTER_H
     return {
         "schema": "gx3-ladder-export/render-bundle", "schema_version": 1,
+        "target": target_json(profile),
         "title": circuit.title, "width": columns * CELL_W + RAIL_PAD * 2,
         "height": offset, "rungs": rungs,
         "limitations": [

@@ -1,0 +1,42 @@
+{
+  "schema_version": 2,
+  "target": {
+    "vendor": "keyence",
+    "series": "kv-x"
+  },
+  "title": "KV-X 運転保持回路",
+  "comments": {
+    "R0": "運転開始",
+    "R1": "停止要求",
+    "R2": "運転許可",
+    "R100": "運転出力",
+    "MR0": "運転保持",
+    "C0": "運転回数"
+  },
+  "rungs": [
+    {
+      "id": "start",
+      "title": "立ち上がりで運転保持",
+      "logic": {"device": "R0", "contact": "rising"},
+      "output": {"type": "set", "device": "MR0"}
+    },
+    {
+      "id": "stop",
+      "title": "停止で運転保持を解除",
+      "logic": "R1",
+      "output": {"type": "rst", "device": "MR0"}
+    },
+    {
+      "id": "reset_count",
+      "title": "立ち下がりで回数をリセット",
+      "logic": {"device": "R1", "contact": "falling"},
+      "output": {"type": "rst", "device": "C0"}
+    },
+    {
+      "id": "run_output",
+      "title": "保持中かつ許可中に出力",
+      "logic": {"and": ["MR0", "R2"]},
+      "output": {"type": "coil", "device": "R100"}
+    }
+  ]
+}
