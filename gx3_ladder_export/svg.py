@@ -54,7 +54,9 @@ def render_svg(bundle: dict) -> str:
                 continue
             # OUT is circular. SET/RST are instruction boxes so their retained
             # action is not mistaken for an ordinary output coil.
-            lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(node["device"])} {esc(node["comment"])}</title>')
+            instruction_text = (f'{node["opcode"]} {node["device"]}'
+                                if node["kind"] == "instruction" else node["device"])
+            lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(instruction_text)} {esc(node["comment"])}</title>')
             if node["kind"] == "contact":
                 for contact_x in (x - CONTACT_HALF, x + CONTACT_HALF):
                     lines.append(f'<line class="symbol" x1="{contact_x}" y1="{y - 13}" x2="{contact_x}" y2="{y + 13}"/>')
@@ -67,10 +69,11 @@ def render_svg(bundle: dict) -> str:
                 lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
             else:
                 lines.append(f'<rect class="symbol" x="{x - INSTRUCTION_HALF}" y="{y - 19}" width="{INSTRUCTION_HALF * 2}" height="38"/>')
-                lines.append(f'<text class="opcode" x="{x}" y="{y + 5}">{esc(node["opcode"])}</text>')
+                lines.append(f'<text class="opcode" x="{x}" y="{y + 5}">{esc(instruction_text)}</text>')
             label_offset = 30 if node["kind"] in ("coil", "instruction") else 24
             comment_offset = 40 if node["kind"] in ("coil", "instruction") else 30
-            lines.append(f'<text class="label" x="{x}" y="{y - label_offset}">{esc(short(node["device"], 14))}</text>')
+            if node["kind"] != "instruction":
+                lines.append(f'<text class="label" x="{x}" y="{y - label_offset}">{esc(short(node["device"], 14))}</text>')
             for index, value in enumerate(comment_lines(node["comment"])):
                 if value:
                     lines.append(f'<text class="comment" x="{x}" y="{y + comment_offset + index * 16}">{esc(value)}</text>')

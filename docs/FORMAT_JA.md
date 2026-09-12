@@ -35,9 +35,12 @@ SVGは出力JSONの明示的な接続を描きます。空白から配線を推�
 `{"inv": {"and": ["X0", "X1"]}}` は条件を評価した後にINV命令で演算結果を反転します。
 INVは`logic`の最外側だけで使用できます。途中に置くとPLCの演算順序に依存するため拒否します。
 
-接点にX/Y/M/L/B、OUT/SET/RST/PLSにY/M/L/Bを使えます。
+接点にX/Y/M/L/B、OUT/SET/PLSの対象にY/M/L/Bを使えます。
+RSTは直接デバイスのX/Y/M/L/SM/F/B/SB/S/T/ST/C/D/W/SD/SW/R/Z/LC/LZを対象にできます。
+GX Works3と同じく、ビットデバイスはOFF、タイマ・カウンタは現在値を0かつ接点をOFF、
+ワードデバイスとインデックスレジスタは値を0にする指定として扱います。
 小文字・ゼロ埋めは正規化します（`x01a` → `X1A`）。
-X/Y/Bは16進、M/Lは10進の表記です。CPUごとの範囲判定は行いません。
+X/Y/B/SB/W/SWは16進、その他の対応デバイスは10進の表記です。CPUごとの範囲判定は行いません。
 ラベル、ビット指定、桁指定、添字・間接指定はv1では拒否します。
 
 `not` は接点まで降ろしてa/bを反転し、必要ならAND/ORを入れ替えます。
@@ -49,9 +52,9 @@ X/Y/Bは16進、M/Lは10進の表記です。CPUごとの範囲判定は行い�
 | type | 構造JSONのaction | 表示 | 意味 |
 |---|---|---|---|
 | coil | OUT | 円形コイル | 条件結果を出力 |
-| set | SET | 命令枠 | 条件成立時にデバイスを保持ON |
-| rst | RST | 命令枠 | 条件成立時に保持を解除 |
-| pls | PLS | 命令枠 | 条件の不成立→成立時に1スキャン出力 |
+| set | SET | `SET Y0`の命令枠 | 条件成立時にデバイスを保持ON |
+| rst | RST | `RST C0`の命令枠 | 条件成立時に対象デバイスをリセット |
+| pls | PLS | `PLS M0`の命令枠 | 条件の不成立→成立時に1スキャン出力 |
 
 未知項目、空のAND/OR、重複回路ID、正規化後に重複するコメントキー、
 XMLに含められない制御文字は拒否します。
@@ -79,7 +82,7 @@ XMLに含められない制御文字は拒否します。
 - 文書のタイトル・描画サイズ
 - 回路ごとの `nodes`（接点・コイル・SET/RST・INV・分岐/合流・母線）
 - `connections`（ID、送信元outポート、接続先inポート）
-- `output_condition`（出力ID、OUT/SET/RST/PLSのaction、導出した条件構造）
+- `output_condition`（出力ID、OUT/SET/RST/PLSのaction、対象デバイスtarget、導出した条件構造）
 - `layout`（ノード座標、接続ごとの折れ線、母線の範囲）
 - 現在の対応範囲に関する `limitations`
 
@@ -93,6 +96,7 @@ XMLに含められない制御文字は拒否します。
 SVGの各接続に `data-connection`、接点・出力に `data-node` を付け、
 JSONとの対応を保持します。長いコメントは図上で省略記号付きで短縮し、
 SVGのtitleとJSONには全文を保持します。
+SET/RST/PLSは、命令名と対象デバイスを同じ命令枠に表示します。
 
 ## 判定の意味
 
@@ -100,3 +104,12 @@ SVGのtitleとJSONには全文を保持します。
 論理的な運転条件の妥当性、PLCの実行、SET/RSTの保持状態、PLSの前回演算結果、現在値の判定ではありません。
 立ち上がり接点の構造は保持しますが、実際の成立判定にはPLCの前回スキャン値が必要です。
 未対応命令を単純なOUTとして表示することはせず、入力エラーとして返します。
+
+## GX Works3表記とRST対象の根拠
+
+- 三菱電機「[MELSEC iQ-F Series Basic Course (for GX Works3)](https://dl.mitsubishielectric.com/dl/fa/document/schooltext/school_text/jy997d69701/jy997d69701a.pdf)」4.3.2のラダー表示に合わせ、
+  SET/RSTは命令と対象デバイスを同じ命令枠へ表示します。
+- 三菱電機「[MELSEC iQ-F FX5 Programming Manual (Instructions, Standard Functions/Function Blocks)](https://dl.mitsubishielectric.com/dl/fa/document/manual/plcf/jy997d55801/jy997d55801z.pdf)」
+  のRST命令に合わせ、直接指定できるビット、タイマ、カウンタ、ワード、インデックスデバイスを区別します。
+
+CPUやファームウェアによる実デバイス範囲は、この形式の検証対象外です。

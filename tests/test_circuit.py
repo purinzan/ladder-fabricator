@@ -115,7 +115,7 @@ class CircuitTests(unittest.TestCase):
             for end, name in [(0, "from"), (-1, "to")]:
                 node = nodes[edge[name]["node"]]
                 pos = positions[node["id"]]
-                half = {"contact": 17, "coil": 22, "instruction": 34,
+                half = {"contact": 17, "coil": 22, "instruction": 48,
                         "inverter": 24}.get(node["kind"], 0)
                 self.assertEqual(path["points"][end], [pos["x"] + (half if end == 0 else -half), pos["y"]])
             for a, b in zip(path["points"], path["points"][1:]):
@@ -146,7 +146,7 @@ class CircuitTests(unittest.TestCase):
             "rungs": [
                 {"id": "set_on_rise", "logic": {"device": "X0", "contact": "rising"},
                  "output": {"type": "set", "device": "Y0"}},
-                {"id": "reset", "logic": "X1", "output": {"type": "rst", "device": "Y0"}},
+                {"id": "reset", "logic": "X1", "output": {"type": "rst", "device": "C0"}},
                 {"id": "pulse", "logic": "X0", "output": {"type": "pls", "device": "M1"}},
                 {"id": "inverted", "logic": {"inv": {"and": ["X0", "X1"]}},
                  "output": {"device": "M0"}},
@@ -158,6 +158,8 @@ class CircuitTests(unittest.TestCase):
         self.assertEqual([rung["output_condition"]["action"] for rung in bundle["rungs"]],
                          ["SET", "RST", "PLS", "OUT"])
         self.assertEqual(bundle["rungs"][0]["output_condition"]["logic"]["contact"], "rising")
+        self.assertEqual([rung["output_condition"]["target"] for rung in bundle["rungs"]],
+                         ["Y0", "C0", "M1", "M0"])
         self.assertEqual(bundle["rungs"][3]["output_condition"]["logic"]["op"], "inv")
         self.assertTrue(any(node["kind"] == "instruction" and node["opcode"] == "SET"
                             for node in bundle["rungs"][0]["nodes"]))
@@ -177,10 +179,11 @@ class CircuitTests(unittest.TestCase):
 
         svg = render_svg(bundle)
         ET.fromstring(svg)
-        self.assertIn(">SET</text>", svg)
-        self.assertIn(">RST</text>", svg)
-        self.assertIn(">PLS</text>", svg)
+        self.assertIn(">SET Y0</text>", svg)
+        self.assertIn(">RST C0</text>", svg)
+        self.assertIn(">PLS M1</text>", svg)
         self.assertIn(">INV</text>", svg)
+        self.assertNotIn(">SET</text>", svg)
         for rung in bundle["rungs"]:
             self.check_geometry(rung)
 
@@ -204,6 +207,24 @@ class CircuitTests(unittest.TestCase):
         doc["rungs"][0]["output"]["device"] = "X0"
         with self.assertRaises(ValidationError):
             parse_circuit(doc)
+
+    def test_rst_accepts_gx_works_direct_reset_targets(self):
+        reset_targets = [
+            "X0", "Y0", "M0", "L0", "SM0", "F0", "B0", "SB0", "S0",
+            "T0", "ST0", "C0", "D0", "W0", "SD0", "SW0", "R0", "Z0", "LC0", "LZ0",
+        ]
+        for target in reset_targets:
+            with self.subTest(target=target):
+                doc = document()
+                doc["rungs"][0]["output"] = {"type": "rst", "device": target}
+                parsed = parse_circuit(doc)
+                self.assertEqual(parsed.rungs[0].output, target)
+        for output_type in ["coil", "set", "pls"]:
+            with self.subTest(output_type=output_type):
+                doc = document()
+                doc["rungs"][0]["output"] = {"type": output_type, "device": "C0"}
+                with self.assertRaisesRegex(ValidationError, "unsupported device type C"):
+                    parse_circuit(doc)
 
     def test_document_metadata_and_normalization(self):
         parsed = parse_circuit(document("x01a", comments={"X01A": "開始"}))

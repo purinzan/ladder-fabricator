@@ -14,10 +14,22 @@ from .device import format_device, parse_device_name
 MAX_RUNGS = 64
 MAX_NODES = 512  # total expression nodes per document, before normalization
 MAX_DEPTH = 24
-# v1 supports relay logic only. Timer/counter instructions and word operands
-# require their own semantics, even though some share contact syntax.
+# Conditions remain a deliberately small relay-logic subset. Output operands
+# are validated per instruction because GX Works3 allows RST to reset more than
+# ordinary bit outputs (for example T, ST, C and D).
 CONTACT_TYPES = frozenset({"X", "Y", "M", "L", "B"})
-OUTPUT_TYPES = frozenset({"Y", "M", "L", "B"})
+BIT_OUTPUT_TYPES = frozenset({"Y", "M", "L", "B"})
+RST_TYPES = frozenset({
+    "X", "Y", "M", "L", "SM", "F", "B", "SB", "S",
+    "T", "ST", "C", "D", "W", "SD", "SW", "R", "Z", "LC", "LZ",
+})
+COMMENT_TYPES = CONTACT_TYPES | BIT_OUTPUT_TYPES | RST_TYPES
+OUTPUT_TYPES_BY_INSTRUCTION = {
+    "coil": BIT_OUTPUT_TYPES,
+    "set": BIT_OUTPUT_TYPES,
+    "rst": RST_TYPES,
+    "pls": BIT_OUTPUT_TYPES,
+}
 ID_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,47}\Z")
 
 
@@ -49,17 +61,16 @@ def text(value: Any, path: str, maximum: int = 2048) -> str:
     return value
 
 
-def device(value: Any, path: str, *, output: bool = False) -> str:
+def device(value: Any, path: str, *, allowed: frozenset[str] = CONTACT_TYPES) -> str:
     name = text(value, path, 32)
     # The reused parser is intentionally permissive; v1's authoring boundary
     # rejects unknown types, signs, indirect addresses and non-ASCII spelling.
     if not re.fullmatch(r"[A-Za-z]+[0-9A-Fa-f]+", name):
-        raise ValidationError(path, "expected a direct bit device such as X0 or M10")
+        raise ValidationError(path, "expected a direct device such as X0, M10, or C0")
     try:
         kind, number = parse_device_name(name)
     except ValueError as exc:
         raise ValidationError(path, str(exc)) from exc
-    allowed = OUTPUT_TYPES if output else CONTACT_TYPES
     if kind not in allowed:
         raise ValidationError(path, f"unsupported device type {kind}; supported: {', '.join(sorted(allowed))}")
     return format_device(kind, number)
@@ -102,7 +113,7 @@ def parse_circuit(payload: Any) -> Circuit:
         raise ValidationError("$.comments", f"expected a device/text map with at most {MAX_NODES} entries")
     comments = {}
     for key, value in raw_comments.items():
-        canonical = device(key, "$.comments")
+        canonical = device(key, "$.comments", allowed=COMMENT_TYPES)
         if canonical in comments:
             raise ValidationError("$.comments", f"duplicate normalized device {canonical}")
         comments[canonical] = text(value, f"$.comments.{key}")
@@ -174,7 +185,8 @@ def parse_circuit(payload: Any) -> Circuit:
         rungs.append(Rung(
             identifier, text(raw.get("title", ""), path + ".title", 160),
             expression(raw["logic"], path + ".logic", identifier + ":logic"),
-            device(output["device"], path + ".output.device", output=True),
+            device(output["device"], path + ".output.device",
+                   allowed=OUTPUT_TYPES_BY_INSTRUCTION[output_type]),
             output_type,
         ))
     return Circuit(title, tuple(rungs), tuple(comments.items()))

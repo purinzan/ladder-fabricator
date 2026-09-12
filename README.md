@@ -96,8 +96,9 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 | `{"or": ["X0", "X1"]}` | どちらかが成立 | 並列 |
 | `{"inv": {"and": ["X0", "X1"]}}` | そこまでの演算結果を反転 | INV命令 |
 
-出力の`type`は通常コイルの`coil`、保持ONの`set`、保持解除の`rst`、
-条件の立ち上がりで1スキャン出力する`pls`を指定できます。
+出力の`type`は通常コイルの`coil`、保持ONの`set`、デバイスをリセットする`rst`、
+条件の立ち上がりで1スキャン出力する`pls`を指定できます。SVGの命令枠にはGX Works3と同様に、
+`SET Y0`、`RST C0`、`PLS M1`のように命令と対象デバイスを一緒に表示します。
 INVはPLCの演算順序を明確にするため、`logic`の最外側だけで使用します。
 
 [命令サンプル](examples/instructions.json)には、立ち上がり接点→SET、RST、PLS、AND結果→INV→OUTを収録しています。
@@ -149,11 +150,13 @@ Path("basic.svg").write_text(render_svg(bundle), encoding="utf-8")
 | 論理 | AND、OR、NOT、入れ子、最外側のINV |
 | 出力 | 各回路に1つのOUT、SET、RST、PLS |
 | 接点デバイス | X、Y、M、L、B |
-| 出力デバイス | Y、M、L、B |
+| OUT/SET/PLSの対象 | Y、M、L、B |
+| RSTの対象 | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ |
 | 文書 | 複数回路、回路名、デバイスコメント |
 | 出力 | SVG、論理・接続構造JSON |
 
-タイマー、立ち下がり接点、比較・データ命令、ラベル、GX3の取込みは未対応です。
+タイマー回路の生成、立ち下がり接点、比較・データ命令、ラベル、GX3の取込みは未対応です。
+RSTではタイマ・カウンタの現在値やワードデバイスを0にする対象として、`T0`、`ST0`、`C0`、`D0`などを指定できます。
 未対応入力はエラーとして返し、OUTへ置き換えて表示することはありません。
 
 形式検証の成功は、PLC上の動作や実機へ投入できることの保証ではありません。
