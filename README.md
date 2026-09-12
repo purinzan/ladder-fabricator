@@ -1,6 +1,7 @@
 # Ladder Fabricator
 
-回路の条件をJSONで記述し、デバイスコメント付きのラダーSVGと論理・接続構造JSONを生成するPythonツールです。
+回路の条件をJSONで記述し、MELSEC iQ-FまたはKEYENCE KV-X表記の、デバイスコメント付き
+ラダーSVGと論理・接続構造JSONを生成するPythonツールです。
 
 Pythonパッケージ名とCLIコマンドは`gx3-ladder-export`です。
 
@@ -10,13 +11,14 @@ GX Works3やGX3ファイルを使わず、依頼内容から作った小さなJS
 ## できること
 
 - a接点・b接点・立ち上がり接点と、直列（AND）・並列（OR）・否定（NOT）を組み合わせる
-- OUT、SET、RST、立ち上がりパルスPLSと、演算結果を反転するINV命令を表す
+- OUT、SET、RST、立ち上がりPLS、立ち下がりPLFと、演算結果を反転するINV命令を表す
 - 条件構造から接点、分岐、合流、円形コイル、命令枠、母線を自動配置する
 - `X0 AND (X1 OR X2)` のような共有接点を複製せずに描く
 - デバイスコメントをSVGへ表示し、全文をSVGのtitleと構造JSONへ保持する
 - GX Works3のラダー編集画面を基準に、1px配線、薄い点線グリッド、行コメント帯、命令セルの色と寸法を再現する
 - 同じ入力から、安定した要素IDと明示的な接続関係を生成する
 - 未対応の命令や壊れた入力を、曖昧な図にせずエラーとして返す
+- KEYENCE KV-XモードでR/MR/LR等を検証し、RES、DIFU、CONへ正しく変換する
 
 ## 依頼からSVGまで
 
@@ -70,6 +72,17 @@ gx3-ladder-export examples/basic.json --format json -o outputs/basic.structure.j
 gx3-ladder-export examples/basic.json --validate-only
 ```
 
+KEYENCE KV-Xの中間ファイルからSVGを生成する場合:
+
+```powershell
+gx3-ladder-export examples/keyence-kv-x.json -o outputs/keyence-kv-x.svg
+```
+
+KEYENCE用JSONは`schema_version: 2`と
+`"target": {"vendor": "keyence", "series": "kv-x"}`を持ちます。同じ意味の`rst`、
+`pls`、`plf`、`inv`は、MELSECではRST/PLS/PLF/INV、KEYENCEでは
+RES/DIFU/DIFD/CONとしてSVGと構造JSONへ出力されます。
+
 インストールせず、リポジトリ内から実行することもできます。
 
 ```powershell
@@ -98,7 +111,7 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 | `{"inv": {"and": ["X0", "X1"]}}` | そこまでの演算結果を反転 | INV命令 |
 
 出力の`type`は通常コイルの`coil`、保持ONの`set`、デバイスをリセットする`rst`、
-条件の立ち上がりで1スキャン出力する`pls`を指定できます。SVGではMOVなどと同じセル構造で、
+条件の立ち上がり・立ち下がりで1スキャン出力する`pls`/`plf`を指定できます。SVGではMOVなどと同じセル構造で、
 命令枠を命令セルとオペランドセルに分けます。`SET | Y0`、`RST | C0`、`PLS | M1`のように、
 対象デバイスとそのコメントを命令枠内へ表示します。
 INVはPLCの演算順序を明確にするため、`logic`の最外側だけで使用します。
@@ -148,16 +161,19 @@ Path("basic.svg").write_text(render_svg(bundle), encoding="utf-8")
 
 | 項目 | 対応 |
 |---|---|
-| 接点 | a接点、b接点、立ち上がり接点 |
+| 接点 | a接点、b接点、立ち上がり接点、立ち下がり接点 |
 | 論理 | AND、OR、NOT、入れ子、最外側のINV |
-| 出力 | 各回路に1つのOUT、SET、RST、PLS |
-| 接点デバイス | X、Y、M、L、B |
-| OUT/SET/PLSの対象 | Y、M、L、B |
-| RSTの対象 | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ |
+| 出力 | 各回路に1つのOUT、SET、RST、PLS、PLF（KVではRES、DIFU、DIFD） |
+| MELSEC接点デバイス | X、Y、M、L、B |
+| MELSEC OUT/SET/PLSの対象 | Y、M、L、B |
+| MELSEC RSTの対象 | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ |
+| KEYENCE接点デバイス | R、B、MR、LR、CR、T、C |
+| KEYENCE OUT/SET/DIFUの対象 | R、B、MR、LR |
+| KEYENCE RESの対象 | R、B、MR、LR、T、C、DM、EM、FM、ZF、W、TM |
 | 文書 | 複数回路、回路名、デバイスコメント |
 | 出力 | SVG、論理・接続構造JSON |
 
-タイマー回路の生成、立ち下がり接点、比較・データ命令、ラベル、GX3の取込みは未対応です。
+タイマー回路の生成、比較・データ命令、ラベル、GX3/KV STUDIOプロジェクトの取込みは未対応です。
 RSTではタイマ・カウンタの現在値やワードデバイスを0にする対象として、`T0`、`ST0`、`C0`、`D0`などを指定できます。
 未対応入力はエラーとして返し、OUTへ置き換えて表示することはありません。
 

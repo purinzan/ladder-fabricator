@@ -1,4 +1,4 @@
-# 回路JSON v1
+# 回路JSON v1 / v2
 
 入力は「回路の作成用形式」、出力JSONはそこから導出する「描画・参照用形式」です。
 SVGは出力JSONの明示的な接続を描きます。空白から配線を推測して付け加えません。
@@ -7,7 +7,8 @@ SVGは出力JSONの明示的な接続を描きます。空白から配線を推�
 
 | 項目 | 必須 | 内容 |
 |---|---|---|
-| schema_version | はい | 整数1 |
+| schema_version | はい | `1`（MELSEC固定）または`2`（メーカー指定） |
+| target | v2では必須 | `vendor`と`series`。現在はMELSEC iQ-FとKEYENCE KV-X |
 | title | いいえ | 文書名、160文字以内。SVGのtitleに格納 |
 | comments | いいえ | デバイス名→コメント。各2048文字以内、最大512件 |
 | rungs | はい | 1〜64回路の配列 |
@@ -19,7 +20,7 @@ SVGは出力JSONの明示的な接続を描きます。空白から配線を推�
 | id | はい | 文書内で一意。英字開始、英数字・_・-、48文字以内 |
 | title | いいえ | 図に表示する回路名、160文字以内 |
 | logic | はい | 下記の条件構造 |
-| output | はい | device必須。typeはcoil（省略時）、set、rst、pls |
+| output | はい | device必須。typeはcoil（省略時）、set、rst、pls、plf |
 
 条件の例:
 
@@ -28,14 +29,15 @@ SVGは出力JSONの明示的な接続を描きます。空白から配線を推�
 ```
 
 `"X0"` は上記の省略形。`contact: "b"` はb接点。
-`contact: "rising"` はOFFからONへ変わった1スキャンだけ成立する立ち上がり接点。
+`contact: "rising"` はOFFからONへ変わった1スキャンだけ成立する立ち上がり接点、
+`contact: "falling"` はONからOFFへ変わった1スキャンだけ成立する立ち下がり接点。
 `{"not": "X0"}` でもb接点を表します。
 `{"and": ["X0", "X1"]}` は直列、
 `{"or": ["X0", "X1"]}` は並列で、各2項以上。入れ子にできます。
 `{"inv": {"and": ["X0", "X1"]}}` は条件を評価した後にINV命令で演算結果を反転します。
 INVは`logic`の最外側だけで使用できます。途中に置くとPLCの演算順序に依存するため拒否します。
 
-接点にX/Y/M/L/B、OUT/SET/PLSの対象にY/M/L/Bを使えます。
+v1およびMELSEC iQ-Fモードでは、接点にX/Y/M/L/B、OUT/SET/PLSの対象にY/M/L/Bを使えます。
 RSTは直接デバイスのX/Y/M/L/SM/F/B/SB/S/T/ST/C/D/W/SD/SW/R/Z/LC/LZを対象にできます。
 GX Works3と同じく、ビットデバイスはOFF、タイマ・カウンタは現在値を0かつ接点をOFF、
 ワードデバイスとインデックスレジスタは値を0にする指定として扱います。
@@ -45,16 +47,47 @@ X/Y/B/SB/W/SWは16進、その他の対応デバイスは10進の表記です。
 
 `not` は接点まで降ろしてa/bを反転し、必要ならAND/ORを入れ替えます。
 積和形へ展開しないので、共有接点の数は増えません。
-立ち上がり接点を`not`で反転することはできません。INVは`not`へ変換せず、明示命令として保持します。
+立ち上がり・立ち下がり接点を`not`で反転することはできません。INVは`not`へ変換せず、明示命令として保持します。
+
+### KEYENCE KV-Xモード
+
+KEYENCE用入力はv2で対象を指定する。
+
+```json
+{
+  "schema_version": 2,
+  "target": {"vendor": "keyence", "series": "kv-x"},
+  "rungs": [
+    {
+      "id": "reset",
+      "logic": {"device": "R0", "contact": "falling"},
+      "output": {"type": "rst", "device": "C0"}
+    }
+  ]
+}
+```
+
+接点にはR/B/MR/LR/CR/T/C、OUT/SET/DIFU/DIFDの対象にはR/B/MR/LRを使える。
+RST相当の`rst`はR/B/MR/LR/T/C/DM/EM/FM/ZF/W/TMを対象にでき、出力時には
+KEYENCEの`RES`になる。`pls`は`DIFU`、`plf`は`DIFD`、`inv`は`CON`として出力する。
+
+R/MR/LRはリレーのビット番号（00～15）を検査し、B/Wは16進として正規化する。
+`@R`、`@MR`、`@LR`、`@T`、`@C`、`@DM`、`@EM`、`@FM`、`@TM`のローカル指定も
+保持する。CR/CMはCPU制御・状態用なので出力先として受け付けない。間接指定`*`、
+インデックス修飾、CPUごとの上限判定はまだ入力対象外である。
+
+CLIの`--target keyence-kv-x`で対象を上書きできる。保存・再利用する中間ファイルには、
+上書きに頼らずv2の`target`を書くことを推奨する。
 
 出力の`type`は次のとおりです。
 
-| type | 構造JSONのaction | 表示 | 意味 |
+| type | MELSEC action | KEYENCE action | 意味 |
 |---|---|---|---|
-| coil | OUT | 円形コイル | 条件結果を出力 |
-| set | SET | `SET`セル＋`Y0`セル | 条件成立時にデバイスを保持ON |
-| rst | RST | `RST`セル＋`C0`セル | 条件成立時に対象デバイスをリセット |
-| pls | PLS | `PLS`セル＋`M0`セル | 条件の不成立→成立時に1スキャン出力 |
+| coil | OUT | OUT | 条件結果を出力 |
+| set | SET | SET | 条件成立時にデバイスを保持ON |
+| rst | RST | RES | 条件成立時に対象デバイスをリセット |
+| pls | PLS | DIFU | 条件の不成立→成立時に1スキャン出力 |
+| plf | PLF | DIFD | 条件の成立→不成立時に1スキャン出力 |
 
 未知項目、空のAND/OR、重複回路ID、正規化後に重複するコメントキー、
 XMLに含められない制御文字は拒否します。
@@ -79,6 +112,7 @@ XMLに含められない制御文字は拒否します。
 `--format json` または `build_bundle(circuit)` の結果:
 
 - `schema: "gx3-ladder-export/render-bundle"` と `schema_version: 1`
+- `target`（メーカー別プロファイルID、vendor、series）
 - 文書のタイトル・描画サイズ
 - 回路ごとの `nodes`（接点・コイル・SET/RST・INV・分岐/合流・母線）
 - `connections`（ID、送信元outポート、接続先inポート）
@@ -96,7 +130,7 @@ XMLに含められない制御文字は拒否します。
 SVGの各接続に `data-connection`、接点・出力に `data-node` を付け、
 JSONとの対応を保持します。長いコメントは図上で省略記号付きで短縮し、
 SVGのtitleとJSONには全文を保持します。
-SET/RST/PLSはMOVなどの命令表示と同じく、命令セルとオペランドセルを分割した同じ命令枠に表示します。
+SET/RST/PLS/PLFまたはSET/RES/DIFU/DIFDは、命令セルとオペランドセルを分割した同じ命令枠に表示します。
 対象デバイスのコメントはオペランドセル内に表示します。
 
 ## 判定の意味

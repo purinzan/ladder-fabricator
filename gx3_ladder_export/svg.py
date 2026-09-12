@@ -16,6 +16,19 @@ WIRE_PX = 1
 GRID_PX = 0.6
 BOX_PX = 1
 
+GX_THEME = {
+    "ink": INK, "grid": GRID, "comment": COMMENT,
+    "statement_fill": STATEMENT_FILL, "statement_border": STATEMENT_BORDER,
+    "font": '"MS Gothic","Yu Gothic UI",Meiryo,Arial,sans-serif',
+    "opcode_fill": "url(#gx3-opcode)",
+}
+KEYENCE_THEME = {
+    "ink": "#1e2732", "grid": "#cbd2da", "comment": "#26754d",
+    "statement_fill": "#e7edf3", "statement_border": "#8998a8",
+    "font": '"Yu Gothic UI",Meiryo,"MS Gothic",Arial,sans-serif',
+    "opcode_fill": "#e4e8ed",
+}
+
 def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
 
@@ -34,23 +47,26 @@ def comment_lines(value: str) -> list[str]:
 
 def render_svg(bundle: dict) -> str:
     """Render a bundle produced by build_bundle, not arbitrary unvalidated JSON."""
+    target = bundle.get("target", {"id": "melsec-iq-f"})
+    keyence = target.get("id") == "keyence-kv-x"
+    theme = KEYENCE_THEME if keyence else GX_THEME
     lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{bundle["width"]}" height="{bundle["height"]}" viewBox="0 0 {bundle["width"]} {bundle["height"]}" role="img">',
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{bundle["width"]}" height="{bundle["height"]}" viewBox="0 0 {bundle["width"]} {bundle["height"]}" role="img" data-target="{esc(target.get("id", "melsec-iq-f"))}">',
         f'<title>{esc(bundle["title"] or "Ladder circuit")}</title>',
         '<defs><linearGradient id="gx3-opcode" x1="0" y1="0" x2="0" y2="1">'
         '<stop offset="0%" stop-color="#f4f3f3"/><stop offset="50%" stop-color="#d3d3d3"/>'
         '<stop offset="100%" stop-color="#969796"/></linearGradient></defs>',
-        f'<style>.wire,.rail,.symbol,.mark{{fill:none;stroke:{INK};stroke-width:{WIRE_PX};'
+        f'<style>.wire,.rail,.symbol,.mark{{fill:none;stroke:{theme["ink"]};stroke-width:{WIRE_PX};'
         'stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke;shape-rendering:crispEdges}'
-        f'.grid{{stroke:{GRID};stroke-width:{GRID_PX};stroke-dasharray:1 2;vector-effect:non-scaling-stroke}}'
-        f'.statement{{fill:{STATEMENT_FILL};stroke:{STATEMENT_BORDER};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
-        '.label,.heading,.comment{font-family:"MS Gothic","Yu Gothic UI",Meiryo,Arial,sans-serif}'
-        f'.label{{font-size:13px;text-anchor:middle;fill:{INK}}}.heading{{font-size:12px;fill:{INK}}}'
-        f'.comment{{font-size:10px;text-anchor:middle;fill:{COMMENT}}}'
-        f'.opcode{{font-family:"MS Gothic",Consolas,monospace;font-size:13px;fill:{INK};text-anchor:middle}}'
-        f'.instruction-body{{fill:white}}.instruction-box{{fill:none;stroke:{INK};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
-        f'.opcode-cell{{fill:url(#gx3-opcode)}}.box-separator{{stroke:{GRID};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke}}'
-        f'.operand{{font-family:"MS Gothic",Consolas,Meiryo,monospace;font-size:12px;fill:{INK};text-anchor:middle}}</style>',
+        f'.grid{{stroke:{theme["grid"]};stroke-width:{GRID_PX};stroke-dasharray:1 2;vector-effect:non-scaling-stroke}}'
+        f'.statement{{fill:{theme["statement_fill"]};stroke:{theme["statement_border"]};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
+        f'.label,.heading,.comment{{font-family:{theme["font"]}}}'
+        f'.label{{font-size:13px;text-anchor:middle;fill:{theme["ink"]}}}.heading{{font-size:12px;fill:{theme["ink"]}}}'
+        f'.comment{{font-size:10px;text-anchor:middle;fill:{theme["comment"]}}}'
+        f'.opcode{{font-family:{theme["font"]};font-size:13px;fill:{theme["ink"]};text-anchor:middle}}'
+        f'.instruction-body{{fill:white}}.instruction-box{{fill:none;stroke:{theme["ink"]};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
+        f'.opcode-cell{{fill:{theme["opcode_fill"]}}}.box-separator{{stroke:{theme["grid"]};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke}}'
+        f'.operand{{font-family:{theme["font"]};font-size:12px;fill:{theme["ink"]};text-anchor:middle}}</style>',
         f'<rect width="{bundle["width"]}" height="{bundle["height"]}" fill="white"/>',
     ]
     for rung in bundle["rungs"]:
@@ -78,9 +94,9 @@ def render_svg(bundle: dict) -> str:
             position = layout["nodes"][node["id"]]
             x, y = position["x"], position["y"]
             if node["kind"] == "inverter":
-                lines.append(f'<g data-node="{esc(node["id"])}"><title>INV</title>')
+                lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(node["opcode"])}</title>')
                 lines.append(f'<rect class="symbol" x="{x - INVERTER_HALF}" y="{y - 18}" width="{INVERTER_HALF * 2}" height="36"/>')
-                lines.append(f'<text class="opcode" x="{x}" y="{y + 5}">INV</text>')
+                lines.append(f'<text class="opcode" x="{x}" y="{y + 5}">{esc(node["opcode"])}</text>')
                 lines.append('</g>')
                 continue
             # OUT is circular. SET/RST are instruction boxes so their retained
@@ -96,8 +112,15 @@ def render_svg(bundle: dict) -> str:
                 elif node["contact"] == "rising":
                     lines.append(f'<line class="mark" x1="{x}" y1="{y + 10}" x2="{x}" y2="{y - 9}"/>')
                     lines.append(f'<polyline class="mark" points="{x - 5},{y - 3} {x},{y - 9} {x + 5},{y - 3}"/>')
+                elif node["contact"] == "falling":
+                    lines.append(f'<line class="mark" x1="{x}" y1="{y - 10}" x2="{x}" y2="{y + 9}"/>')
+                    lines.append(f'<polyline class="mark" points="{x - 5},{y + 3} {x},{y + 9} {x + 5},{y + 3}"/>')
             elif node["kind"] == "coil":
-                lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
+                if keyence:
+                    lines.append(f'<path class="symbol" d="M {x - 3} {y - COIL_HALF} Q {x - COIL_HALF} {y} {x - 3} {y + COIL_HALF}"/>')
+                    lines.append(f'<path class="symbol" d="M {x + 3} {y - COIL_HALF} Q {x + COIL_HALF} {y} {x + 3} {y + COIL_HALF}"/>')
+                else:
+                    lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
             else:
                 box_left = x - INSTRUCTION_HALF
                 box_top = y - 29

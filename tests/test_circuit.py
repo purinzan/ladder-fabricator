@@ -32,6 +32,8 @@ def requested_value(expr, state, previous=None):
         role = expr.get("contact", "a")
         if role == "rising":
             return state[expr["device"]] and not previous.get(expr["device"], False)
+        if role == "falling":
+            return not state[expr["device"]] and previous.get(expr["device"], False)
         return state[expr["device"]] != (role == "b")
     if "not" in expr:
         return not requested_value(expr["not"], state, previous)
@@ -61,6 +63,8 @@ def graph_value(rung, state, previous=None):
             if node["kind"] == "contact":
                 if node["contact"] == "rising":
                     contact = state[node["device"]] and not previous.get(node["device"], False)
+                elif node["contact"] == "falling":
+                    contact = not state[node["device"]] and previous.get(node["device"], False)
                 else:
                     contact = state[node["device"]] != (node["contact"] == "b")
                 power = power and contact
@@ -216,7 +220,7 @@ class CircuitTests(unittest.TestCase):
         invalid = [
             {}, {"device": "X0", "typo": 1}, {"and": []}, {"or": ["X0"]},
             {"and": ["X0", "X1"], "or": ["X2", "X3"]},
-            {"xor": ["X0", "X1"]}, {"device": "X0", "contact": "falling"},
+            {"xor": ["X0", "X1"]},
             {"and": ["X0", {"inv": "X1"}]}, {"not": {"device": "X0", "contact": "rising"}},
             "D0", "T0", "Unknown1", "M1Z2", "D0.1", "X-1", "X+1", 1, True,
         ]
@@ -267,6 +271,60 @@ class CircuitTests(unittest.TestCase):
         doc = document()
         doc["rungs"].append(copy.deepcopy(doc["rungs"][0]))
         with self.assertRaises(ValidationError):
+            parse_circuit(doc)
+
+    def test_keyence_target_changes_devices_opcodes_and_svg_profile(self):
+        doc = {
+            "schema_version": 2,
+            "target": {"vendor": "keyence", "series": "kv-x"},
+            "comments": {"R0": "運転条件", "MR1": "保持出力", "C0": "回数"},
+            "rungs": [
+                {"id": "set", "logic": {"device": "R0", "contact": "rising"},
+                 "output": {"type": "set", "device": "MR1"}},
+                {"id": "reset", "logic": {"device": "R0", "contact": "falling"},
+                 "output": {"type": "rst", "device": "C0"}},
+                {"id": "pulse", "logic": {"inv": "R0"},
+                 "output": {"type": "pls", "device": "MR2"}},
+                {"id": "pulse_fall", "logic": "R0",
+                 "output": {"type": "plf", "device": "MR3"}},
+                {"id": "coil", "logic": "B00af",
+                 "output": {"device": "R100"}},
+            ],
+        }
+        circuit = parse_circuit(doc)
+        self.assertEqual(circuit.target, "keyence-kv-x")
+        self.assertEqual(circuit.rungs[0].logic.device, "R000")
+        self.assertEqual(circuit.rungs[0].output, "MR001")
+        self.assertEqual(circuit.rungs[4].logic.device, "B00AF")
+        bundle = build_bundle(circuit)
+        self.assertEqual(bundle["target"], {
+            "id": "keyence-kv-x", "vendor": "keyence", "series": "kv-x"})
+        self.assertEqual([r["output_condition"]["action"] for r in bundle["rungs"]],
+                         ["SET", "RES", "DIFU", "DIFD", "OUT"])
+        self.assertTrue(any(node.get("opcode") == "CON"
+                            for node in bundle["rungs"][2]["nodes"]))
+        svg = render_svg(bundle)
+        ET.fromstring(svg)
+        self.assertIn('data-target="keyence-kv-x"', svg)
+        self.assertIn(">RES</text>", svg)
+        self.assertIn(">DIFU</text>", svg)
+        self.assertIn(">DIFD</text>", svg)
+        self.assertIn(">CON</text>", svg)
+        self.assertNotIn("<circle", svg)
+
+    def test_keyence_target_rejects_melsec_and_read_only_devices(self):
+        doc = {
+            "schema_version": 2,
+            "target": {"vendor": "keyence", "series": "kv-x"},
+            "rungs": [{"id": "r", "logic": "X0", "output": {"device": "R0"}}],
+        }
+        with self.assertRaisesRegex(ValidationError, "unsupported KV-X device"):
+            parse_circuit(doc)
+        doc["rungs"][0] = {"id": "r", "logic": "CR0", "output": {"device": "CR1"}}
+        with self.assertRaisesRegex(ValidationError, "unsupported device type CR"):
+            parse_circuit(doc)
+        doc["rungs"][0] = {"id": "r", "logic": "@B0", "output": {"device": "R0"}}
+        with self.assertRaisesRegex(ValidationError, "cannot be a KV-X local device"):
             parse_circuit(doc)
 
     def test_depth_and_size_boundaries(self):
@@ -323,7 +381,8 @@ class CircuitTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
 
     def test_example_is_valid(self):
-        for name, rung_count in [("basic.json", 1), ("instructions.json", 4)]:
+        for name, rung_count in [("basic.json", 1), ("instructions.json", 4),
+                                 ("keyence-kv-x.json", 4)]:
             with self.subTest(name=name):
                 data = json.loads((ROOT / "examples" / name).read_text(encoding="utf-8"))
                 bundle = build_bundle(parse_circuit(data))

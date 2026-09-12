@@ -21,8 +21,10 @@ def unique_object(pairs: list[tuple[str, object]]) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Validated ladder circuit JSON to SVG or structured connections.")
-    parser.add_argument("input", type=Path, help="version 1 circuit JSON")
+    parser.add_argument("input", type=Path, help="version 1 or 2 circuit JSON")
     parser.add_argument("--format", choices=("svg", "json"), default="svg")
+    parser.add_argument("--target", choices=("melsec-iq-f", "keyence-kv-x"),
+                        help="override the target stored in the circuit JSON")
     parser.add_argument("-o", "--output", type=Path)
     parser.add_argument("--validate-only", action="store_true", help="validate supported relay structure without rendering")
     args = parser.parse_args(argv)
@@ -39,7 +41,8 @@ def main(argv: list[str] | None = None) -> int:
             raw = stream.read(MAX_INPUT_BYTES + 1)
         if len(raw) > MAX_INPUT_BYTES:
             raise ValidationError("$", f"input exceeds {MAX_INPUT_BYTES} bytes")
-        circuit = parse_circuit(json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_object))
+        circuit = parse_circuit(json.loads(raw.decode("utf-8-sig"), object_pairs_hook=unique_object),
+                                target_override=args.target)
         if args.validate_only:
             print(f"valid: {len(circuit.rungs)} rung(s); structural relay checks only")
             return 0

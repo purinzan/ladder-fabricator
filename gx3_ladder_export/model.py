@@ -9,27 +9,11 @@ from dataclasses import dataclass
 import re
 from typing import Any
 
-from .device import format_device, parse_device_name
+from .target import MELSEC_IQ_F, TargetProfile, canonical_device, profile_from_id, profile_from_target
 
 MAX_RUNGS = 64
 MAX_NODES = 512  # total expression nodes per document, before normalization
 MAX_DEPTH = 24
-# Conditions remain a deliberately small relay-logic subset. Output operands
-# are validated per instruction because GX Works3 allows RST to reset more than
-# ordinary bit outputs (for example T, ST, C and D).
-CONTACT_TYPES = frozenset({"X", "Y", "M", "L", "B"})
-BIT_OUTPUT_TYPES = frozenset({"Y", "M", "L", "B"})
-RST_TYPES = frozenset({
-    "X", "Y", "M", "L", "SM", "F", "B", "SB", "S",
-    "T", "ST", "C", "D", "W", "SD", "SW", "R", "Z", "LC", "LZ",
-})
-COMMENT_TYPES = CONTACT_TYPES | BIT_OUTPUT_TYPES | RST_TYPES
-OUTPUT_TYPES_BY_INSTRUCTION = {
-    "coil": BIT_OUTPUT_TYPES,
-    "set": BIT_OUTPUT_TYPES,
-    "rst": RST_TYPES,
-    "pls": BIT_OUTPUT_TYPES,
-}
 ID_RE = re.compile(r"[A-Za-z][A-Za-z0-9_-]{0,47}\Z")
 
 
@@ -61,19 +45,15 @@ def text(value: Any, path: str, maximum: int = 2048) -> str:
     return value
 
 
-def device(value: Any, path: str, *, allowed: frozenset[str] = CONTACT_TYPES) -> str:
+def device(value: Any, path: str, profile: TargetProfile, *, allowed: frozenset[str]) -> str:
     name = text(value, path, 32)
-    # The reused parser is intentionally permissive; v1's authoring boundary
-    # rejects unknown types, signs, indirect addresses and non-ASCII spelling.
-    if not re.fullmatch(r"[A-Za-z]+[0-9A-Fa-f]+", name):
-        raise ValidationError(path, "expected a direct device such as X0, M10, or C0")
     try:
-        kind, number = parse_device_name(name)
+        canonical, kind = canonical_device(name, profile)
     except ValueError as exc:
         raise ValidationError(path, str(exc)) from exc
     if kind not in allowed:
         raise ValidationError(path, f"unsupported device type {kind}; supported: {', '.join(sorted(allowed))}")
-    return format_device(kind, number)
+    return canonical
 
 
 @dataclass(frozen=True)
@@ -99,21 +79,40 @@ class Circuit:
     title: str
     rungs: tuple[Rung, ...]
     comments: tuple[tuple[str, str], ...]
+    target: str = MELSEC_IQ_F.id
 
 
-def parse_circuit(payload: Any) -> Circuit:
+def parse_circuit(payload: Any, target_override: str | None = None) -> Circuit:
     """Reject unsupported or excessive input; never return a partial circuit."""
-    doc = fields(payload, {"schema_version", "title", "comments", "rungs"},
+    doc = fields(payload, {"schema_version", "target", "title", "comments", "rungs"},
                  {"schema_version", "rungs"}, "$")
-    if type(doc["schema_version"]) is not int or doc["schema_version"] != 1:
-        raise ValidationError("$.schema_version", "expected version 1")
+    version = doc["schema_version"]
+    if type(version) is not int or version not in (1, 2):
+        raise ValidationError("$.schema_version", "expected version 1 or 2")
+    if target_override:
+        try:
+            profile = profile_from_id(target_override)
+        except ValueError as exc:
+            raise ValidationError("--target", str(exc)) from exc
+    elif "target" in doc:
+        try:
+            profile = profile_from_target(doc["target"])
+        except ValueError as exc:
+            message = str(exc)
+            raise ValidationError("$.target", message.split(": ", 1)[-1]) from exc
+    else:
+        profile = MELSEC_IQ_F
+    if version == 1 and "target" in doc:
+        raise ValidationError("$.target", "requires schema_version 2")
+    if version == 2 and "target" not in doc and not target_override:
+        raise ValidationError("$.target", "required for schema_version 2")
     title = text(doc.get("title", ""), "$.title", 160)
     raw_comments = doc.get("comments", {})
     if not isinstance(raw_comments, dict) or len(raw_comments) > MAX_NODES:
         raise ValidationError("$.comments", f"expected a device/text map with at most {MAX_NODES} entries")
     comments = {}
     for key, value in raw_comments.items():
-        canonical = device(key, "$.comments", allowed=COMMENT_TYPES)
+        canonical = device(key, "$.comments", profile, allowed=profile.comment_types)
         if canonical in comments:
             raise ValidationError("$.comments", f"duplicate normalized device {canonical}")
         comments[canonical] = text(value, f"$.comments.{key}")
@@ -138,13 +137,14 @@ def parse_circuit(payload: Any) -> Circuit:
         if "device" in raw:
             leaf = fields(raw, {"device", "contact"}, {"device"}, path)
             role = leaf.get("contact", "a")
-            if role not in ("a", "b", "rising"):
-                raise ValidationError(path + ".contact", "expected a, b, or rising")
+            if role not in ("a", "b", "rising", "falling"):
+                raise ValidationError(path + ".contact", "expected a, b, rising, or falling")
             if negate:
-                if role == "rising":
-                    raise ValidationError(path + ".contact", "rising contacts cannot be negated")
+                if role in ("rising", "falling"):
+                    raise ValidationError(path + ".contact", "edge contacts cannot be negated")
                 role = "b" if role == "a" else "a"
-            return Expr(identifier, "contact", device=device(leaf["device"], path + ".device"), contact=role)
+            return Expr(identifier, "contact", device=device(
+                leaf["device"], path + ".device", profile, allowed=profile.contact_types), contact=role)
         fields(raw, {"and", "or", "not", "inv"}, set(), path)
         if len(raw) != 1:
             raise ValidationError(path, "expected exactly one of and/or/not/inv")
@@ -180,16 +180,16 @@ def parse_circuit(payload: Any) -> Circuit:
         seen.add(identifier)
         output = fields(raw["output"], {"type", "device"}, {"device"}, path + ".output")
         output_type = output.get("type", "coil")
-        if output_type not in ("coil", "set", "rst", "pls"):
-            raise ValidationError(path + ".output.type", "expected coil (OUT), set, rst, or pls")
+        if output_type not in ("coil", "set", "rst", "pls", "plf"):
+            raise ValidationError(path + ".output.type", "expected coil (OUT), set, rst, pls, or plf")
         rungs.append(Rung(
             identifier, text(raw.get("title", ""), path + ".title", 160),
             expression(raw["logic"], path + ".logic", identifier + ":logic"),
-            device(output["device"], path + ".output.device",
-                   allowed=OUTPUT_TYPES_BY_INSTRUCTION[output_type]),
+            device(output["device"], path + ".output.device", profile,
+                   allowed=(profile.reset_types if output_type == "rst" else profile.bit_output_types)),
             output_type,
         ))
-    return Circuit(title, tuple(rungs), tuple(comments.items()))
+    return Circuit(title, tuple(rungs), tuple(comments.items()), profile.id)
 
 
 def condition(expr: Expr) -> dict:
