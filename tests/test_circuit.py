@@ -10,6 +10,8 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from gx3_ladder_export import ValidationError, parse_circuit, build_bundle, render_svg
+from gx3_ladder_export.layout import CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+from gx3_ladder_export.svg import BOX_PX, GRID, GRID_PX, INK, WIRE_PX
 from gx3_ladder_export.model import MAX_DEPTH, MAX_NODES, MAX_RUNGS
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -115,8 +117,9 @@ class CircuitTests(unittest.TestCase):
             for end, name in [(0, "from"), (-1, "to")]:
                 node = nodes[edge[name]["node"]]
                 pos = positions[node["id"]]
-                half = {"contact": 17, "coil": 22, "instruction": 115,
-                        "inverter": 24}.get(node["kind"], 0)
+                half = {"contact": CONTACT_HALF, "coil": COIL_HALF,
+                        "instruction": INSTRUCTION_HALF,
+                        "inverter": INVERTER_HALF}.get(node["kind"], 0)
                 self.assertEqual(path["points"][end], [pos["x"] + (half if end == 0 else -half), pos["y"]])
             for a, b in zip(path["points"], path["points"][1:]):
                 self.assertTrue(a[0] == b[0] or a[1] == b[1])
@@ -192,6 +195,22 @@ class CircuitTests(unittest.TestCase):
         self.assertIn('class="box-separator"', svg)
         for rung in bundle["rungs"]:
             self.check_geometry(rung)
+
+    def test_svg_uses_pixel_calibrated_gx_works3_profile(self):
+        bundle = build_bundle(parse_circuit(document()))
+        svg = render_svg(bundle)
+        root = ET.fromstring(svg)
+        self.assertIn(f"stroke:{INK};stroke-width:{WIRE_PX}", svg)
+        self.assertIn(f"stroke:{GRID};stroke-width:{GRID_PX}", svg)
+        self.assertIn(f"stroke-width:{BOX_PX}", svg)
+        self.assertIn("vector-effect:non-scaling-stroke", svg)
+        self.assertIn('transform="translate(0.5 0.5)"', svg)
+        self.assertNotIn('rx="2"', svg)
+        classes = [element.attrib.get("class") for element in root.iter()]
+        self.assertIn("statement", classes)
+        self.assertEqual(classes.count("grid"),
+                         bundle["rungs"][0]["layout"]["grid"]["columns"]
+                         + bundle["rungs"][0]["layout"]["grid"]["rows"] + 2)
 
     def test_unknown_and_unsupported_inputs_fail(self):
         invalid = [
