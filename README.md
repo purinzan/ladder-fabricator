@@ -3,7 +3,8 @@
 回路の条件をJSONで記述し、MELSEC iQ-FまたはKEYENCE KV-X表記の、デバイスコメント付き
 ラダーSVGと論理・接続構造JSONを生成するPythonツールです。
 
-Pythonパッケージ名とCLIコマンドは`gx3-ladder-export`です。
+Pythonパッケージ名は`gx3-ladder-export`です。CLIは`ladder-fabricator`を使用でき、
+従来名の`gx3-ladder-export`も同じ機能の別名として残しています。
 
 ## 対応PLCモード
 
@@ -16,7 +17,7 @@ Pythonパッケージ名とCLIコマンドは`gx3-ladder-export`です。
 SVGの表現を切り替えます。従来の`schema_version: 1`は三菱電機モードとして扱い、
 `schema_version: 2`では`target`に三菱電機またはKEYENCEを明示できます。
 
-GX Works3やGX3ファイルを使わず、依頼内容から作った小さなJSONだけでラダー図を生成できます。
+GX Works3やGX3ファイルを使わず、依頼内容から作った小さな共通AST（JSON）だけでラダー図を生成できます。
 座標や配線を手書きする必要はありません。Python 3.10以上で動作し、実行時の追加依存もありません。
 
 ## できること
@@ -83,6 +84,23 @@ gx3-ladder-export examples/basic.json --format json -o outputs/basic.structure.j
 gx3-ladder-export examples/basic.json --validate-only
 ```
 
+AIと人が確認しやすい`rung-text --comments`形式にする場合:
+
+```powershell
+ladder-fabricator rung-text examples/basic.json --comments
+```
+
+```text
+# 共有接点を保持した並列回路
+shared_branch  X0 AND (X1 OR X2) AND /X3 -> Y0  # X0="開始条件", X1="条件1", X2="条件2", X3="停止要求", Y0="出力"
+```
+
+入力を検証・正規化した再利用可能なASTとして保存する場合:
+
+```powershell
+ladder-fabricator examples/basic.json --format ast -o outputs/basic.ast.json
+```
+
 KEYENCE KV-Xの中間ファイルからSVGを生成する場合:
 
 ```powershell
@@ -102,15 +120,22 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 
 ## AIとこのツールの役割
 
-このパッケージ自体は自然言語を解釈しません。AIまたは利用者が要求を回路JSONへ変換し、
-このツールが形式の検証、論理構造の保持、配置、SVG生成を担当します。
+このパッケージ自体は自然言語を解釈しません。AIまたは利用者が要求を共通ASTへ変換し、
+このツールが形式の検証、論理構造の保持、メーカー別命令への変換、配置、SVG生成を担当します。
 
-この分離により、入力した論理をJSONで確認してから図を生成できます。同じJSONからSVGと
-構造JSONを繰り返し生成でき、AIや描画環境を実行時の依存にしません。
+この分離により、入力した論理をJSONまたはrung-textで確認してから図を生成できます。
+同じASTから三菱電機・KEYENCE向けの命令表記、構造JSON、SVGを生成するため、各出力が
+別々に回路の意味を解釈することはありません。
+
+```text
+依頼文 → 共通AST → rung-text --comments
+                 ├→ メーカー別命令 → 構造JSON → SVG
+                 └→ 正規化AST（保存・再入力）
+```
 
 ## 入力形式
 
-`logic` には次の4形式を入れ子で指定します。
+作成用JSONが共通ASTの保存形式です。`logic`には次の形式を入れ子で指定します。
 
 | JSON | 意味 | ラダー表現 |
 |---|---|---|
@@ -133,6 +158,16 @@ INVはPLCの演算順序を明確にするため、`logic`の最外側だけで�
 [回路JSON v1](docs/FORMAT_JA.md)を参照してください。
 
 ## 生成物
+
+### 正規化AST
+
+`--format ast`は、短縮表記とNOTを正規化した共通ASTを出力します。メーカー固有の
+RST/RESなどへ変換する前の意味を保持し、そのまま再入力できます。
+
+### rung-text
+
+`rung-text`はASTを「成立条件 → 出力」の1行形式にします。`--comments`を付けると、
+その回路で参照するデバイスコメントだけを同じ行へ追加します。
 
 ### SVG
 
@@ -157,16 +192,20 @@ INVはPLCの演算順序を明確にするため、`logic`の最外側だけで�
 import json
 from pathlib import Path
 
-from gx3_ladder_export import build_bundle, parse_circuit, render_svg
+from gx3_ladder_export import (
+    build_bundle, circuit_to_ast, parse_circuit, render_rung_text, render_svg,
+)
 
 payload = json.loads(Path("examples/basic.json").read_text(encoding="utf-8"))
 circuit = parse_circuit(payload)
+canonical_ast = circuit_to_ast(circuit)
+print(render_rung_text(circuit, comments=True))
 bundle = build_bundle(circuit)
 Path("basic.svg").write_text(render_svg(bundle), encoding="utf-8")
 ```
 
-処理は`parse_circuit`（検証・正規化）、`build_bundle`（接続・配置）、
-`render_svg`（SVG化）の3段階です。中間の`bundle`を使えば、別の表示形式も追加できます。
+`parse_circuit`が共通ASTを検証・正規化します。`circuit_to_ast`と`render_rung_text`は
+同じASTを保存用・確認用に変換し、`build_bundle`が接続と配置を導出して`render_svg`が描画します。
 
 ## 対応範囲
 

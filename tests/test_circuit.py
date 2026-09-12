@@ -9,7 +9,10 @@ import tempfile
 import unittest
 from xml.etree import ElementTree as ET
 
-from gx3_ladder_export import ValidationError, parse_circuit, build_bundle, render_svg
+from gx3_ladder_export import (
+    ValidationError, build_bundle, circuit_to_ast, parse_circuit,
+    render_rung_text, render_svg, rung_text_records,
+)
 from gx3_ladder_export.layout import CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
 from gx3_ladder_export.svg import BOX_PX, GRID, GRID_PX, INK, WIRE_PX
 from gx3_ladder_export.model import MAX_DEPTH, MAX_NODES, MAX_RUNGS
@@ -79,6 +82,60 @@ def graph_value(rung, state, previous=None):
 
 
 class CircuitTests(unittest.TestCase):
+    def test_canonical_ast_is_normalized_vendor_neutral_and_round_trippable(self):
+        source = {
+            "schema_version": 2,
+            "target": {"vendor": "keyence", "series": "kv-x"},
+            "title": "保持回路",
+            "comments": {"r0": "起動", "mr1": "運転保持"},
+            "rungs": [{
+                "id": "hold",
+                "title": "運転保持",
+                "logic": {"not": {"or": ["R0", {"device": "MR1", "contact": "b"}]}},
+                "output": {"type": "rst", "device": "MR1"},
+            }],
+        }
+        circuit = parse_circuit(source)
+        ast = circuit_to_ast(circuit)
+        self.assertEqual(ast["schema_version"], 2)
+        self.assertEqual(ast["target"], {"vendor": "keyence", "series": "kv-x"})
+        self.assertEqual(ast["rungs"][0]["output"], {"type": "rst", "device": "MR001"})
+        self.assertNotIn("RES", json.dumps(ast))
+        self.assertEqual(ast["rungs"][0]["logic"], {
+            "and": [
+                {"device": "R000", "contact": "b"},
+                {"device": "MR001", "contact": "a"},
+            ]
+        })
+        self.assertEqual(parse_circuit(ast), circuit)
+
+    def test_rung_text_and_comments_are_derived_from_the_same_ast(self):
+        source = {
+            "schema_version": 2,
+            "target": {"vendor": "keyence", "series": "kv-x"},
+            "comments": {"R0": "起動", "R1": "停止", "MR1": "運転保持", "R2": "未使用"},
+            "rungs": [{
+                "id": "hold",
+                "title": "運転保持",
+                "logic": {"and": [
+                    {"device": "R0", "contact": "rising"},
+                    {"not": "R1"},
+                ]},
+                "output": {"type": "rst", "device": "MR1"},
+            }],
+        }
+        circuit = parse_circuit(source)
+        records = rung_text_records(circuit, comments=True)
+        self.assertEqual(records[0]["condition"], "RISING(R000) AND /R001")
+        self.assertEqual(records[0]["opcode"], "RES")
+        self.assertEqual(records[0]["comments"], {
+            "R000": "起動", "R001": "停止", "MR001": "運転保持",
+        })
+        text_output = render_rung_text(circuit, comments=True)
+        self.assertIn("hold  RISING(R000) AND /R001 -> RES MR001", text_output)
+        self.assertIn('R000="起動"', text_output)
+        self.assertNotIn("未使用", text_output)
+
     def test_shared_contacts_are_not_duplicated(self):
         logic = {"and": ["X0", {"or": ["X1", "X2"]}]}
         rung = build_bundle(parse_circuit(document(logic)))["rungs"][0]
@@ -360,15 +417,30 @@ class CircuitTests(unittest.TestCase):
             source = root / "回路.json"
             source.write_text(json.dumps(document({"and": ["X0", {"not": "X1"}]})), encoding="utf-8")
             command = [sys.executable, "-m", "gx3_ladder_export", str(source)]
-            for fmt in ["svg", "json"]:
+            for fmt in ["svg", "json", "ast", "rung-text"]:
                 dest = root / "出力" / f"result.{fmt}"
-                result = subprocess.run([*command, "--format", fmt, "-o", str(dest)],
+                options = [*command, "--format", fmt, "-o", str(dest)]
+                if fmt == "rung-text":
+                    options.append("--comments")
+                result = subprocess.run(options,
                                         cwd=ROOT, capture_output=True, text=True, encoding="utf-8")
                 self.assertEqual(result.returncode, 0, result.stderr)
                 if fmt == "svg":
                     ET.parse(dest)
-                else:
+                elif fmt == "json":
                     self.assertEqual(json.loads(dest.read_text(encoding="utf-8"))["schema_version"], 1)
+                elif fmt == "ast":
+                    ast = json.loads(dest.read_text(encoding="utf-8"))
+                    self.assertEqual(ast["schema_version"], 2)
+                    self.assertEqual(parse_circuit(ast), parse_circuit(document({"and": ["X0", {"not": "X1"}]})))
+                else:
+                    self.assertIn("r1  X0 AND /X1 -> Y0", dest.read_text(encoding="utf-8"))
+            result = subprocess.run(
+                [sys.executable, "-m", "gx3_ladder_export", "rung-text", str(source), "--comments"],
+                cwd=ROOT, capture_output=True, text=True, encoding="utf-8",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("r1  X0 AND /X1 -> Y0", result.stdout)
             # Invalid input must not create an output or overwrite an existing one.
             old = root / "untouched.svg"
             old.write_text("keep", encoding="utf-8")

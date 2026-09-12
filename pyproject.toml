@@ -13,6 +13,7 @@ dependencies = []
 
 [project.scripts]
 gx3-ladder-export = "gx3_ladder_export.cli:main"
+ladder-fabricator = "gx3_ladder_export.cli:main"
 
 [tool.setuptools.packages.find]
 include = ["gx3_ladder_export*"]
