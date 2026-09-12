@@ -7,6 +7,7 @@
     "X2": "許可条件1",
     "X3": "許可条件2",
     "Y0": "保持出力",
+    "C0": "運転回数",
     "M0": "反転結果",
     "M1": "立ち上がりパルス"
   },
@@ -18,10 +19,10 @@
       "output": {"type": "set", "device": "Y0"}
     },
     {
-      "id": "reset_output",
-      "title": "保持を解除",
+      "id": "reset_counter",
+      "title": "カウンタをリセット",
       "logic": "X1",
-      "output": {"type": "rst", "device": "Y0"}
+      "output": {"type": "rst", "device": "C0"}
     },
     {
       "id": "pulse_output",

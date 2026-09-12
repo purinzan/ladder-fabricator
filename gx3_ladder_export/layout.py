@@ -15,7 +15,7 @@ HEADER_H = 58
 FOOTER_H = 32
 CONTACT_HALF = 17
 COIL_HALF = 22
-INSTRUCTION_HALF = 34
+INSTRUCTION_HALF = 48
 INVERTER_HALF = 24
 
 
@@ -141,7 +141,10 @@ def build_bundle(circuit: Circuit) -> dict:
             "id": rung.id, "title": rung.title,
             "nodes": list(builder.nodes.values()),
             "connections": builder.connections,
-            "output_condition": {"output": coil, "action": opcode, "logic": condition(rung.logic)},
+            "output_condition": {
+                "output": coil, "action": opcode, "target": rung.output,
+                "logic": condition(rung.logic),
+            },
             "layout": {
                 "nodes": builder.positions, "connections": builder.paths,
                 "rails": [{"node": node, "x": builder.positions[node]["x"], "y1": rail_top, "y2": rail_bottom}
