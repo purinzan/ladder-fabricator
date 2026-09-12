@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import html
-from .layout import CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+from .layout import CELL_W, CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
 
 def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
@@ -25,14 +25,17 @@ def render_svg(bundle: dict) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{bundle["width"]}" height="{bundle["height"]}" viewBox="0 0 {bundle["width"]} {bundle["height"]}" role="img">',
         f'<title>{esc(bundle["title"] or "Ladder circuit")}</title>',
+        '<defs><linearGradient id="gx3-opcode" x1="0" y1="0" x2="0" y2="1">'
+        '<stop offset="0%" stop-color="#f8f9fb"/><stop offset="50%" stop-color="#cfd4dc"/>'
+        '<stop offset="100%" stop-color="#9da6b2"/></linearGradient></defs>',
         '<style>.wire,.rail,.symbol,.mark{fill:none;stroke:#202832;stroke-width:2.4}'
         '.label,.heading,.comment{font-family:Meiryo,Arial,sans-serif;fill:#16242f}'
         '.label{font-size:14px;text-anchor:middle}.heading{font-size:14px}'
         '.comment{font-size:12px;text-anchor:middle;fill:#14734a}'
-        '.opcode{font-family:Meiryo,Arial,sans-serif;font-size:13px;fill:#16242f;text-anchor:middle}'
-        '.instruction-box{fill:white;stroke:#202832;stroke-width:1.8}'
-        '.box-separator{stroke:#202832;stroke-width:1}'
-        '.operand{font-family:Meiryo,Arial,sans-serif;font-size:13px;fill:#16242f;text-anchor:middle}</style>',
+        '.opcode{font-family:Consolas,monospace;font-size:14px;font-weight:bold;fill:#16242f;text-anchor:middle}'
+        '.instruction-body{fill:white}.instruction-box{fill:none;stroke:#202832;stroke-width:1.8}'
+        '.opcode-cell{fill:url(#gx3-opcode)}.box-separator{stroke:#9aa4b1;stroke-width:1}'
+        '.operand{font-family:Consolas,Meiryo,monospace;font-size:13px;fill:#111827;text-anchor:middle}</style>',
         f'<rect width="{bundle["width"]}" height="{bundle["height"]}" fill="white"/>',
     ]
     for rung in bundle["rungs"]:
@@ -72,17 +75,19 @@ def render_svg(bundle: dict) -> str:
                 lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
             else:
                 box_left = x - INSTRUCTION_HALF
-                box_top = y - 19
+                box_top = y - 29
                 box_width = INSTRUCTION_HALF * 2
-                opcode_width = box_width / 2
+                opcode_width = CELL_W - 10
                 operand_x = box_left + opcode_width + (box_width - opcode_width) / 2
-                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="38"/>')
-                lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + 38}"/>')
+                lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="58" rx="2"/>')
+                lines.append(f'<rect class="opcode-cell" x="{box_left}" y="{box_top}" width="{opcode_width}" height="58"/>')
+                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="58" rx="2"/>')
+                lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + 58}"/>')
                 lines.append(f'<text class="opcode" x="{box_left + opcode_width / 2}" y="{y + 5}">{esc(node["opcode"])}</text>')
-                lines.append(f'<text class="operand" x="{operand_x}" y="{y + 5}">{esc(" ".join(node["operands"]))}</text>')
+                lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16}">{esc(" ".join(node["operands"]))}</text>')
                 for index, value in enumerate(comment_lines(node["comment"])):
                     if value:
-                        lines.append(f'<text class="comment" x="{operand_x}" y="{y + 35 + index * 16}">{esc(value)}</text>')
+                        lines.append(f'<text class="comment" x="{operand_x}" y="{box_top + 37 + index * 13}">{esc(value)}</text>')
             label_offset = 30 if node["kind"] in ("coil", "instruction") else 24
             comment_offset = 40 if node["kind"] in ("coil", "instruction") else 30
             if node["kind"] != "instruction":

@@ -188,7 +188,7 @@ class CircuitTests(unittest.TestCase):
         self.assertIn(">C0</text>", svg)
         self.assertIn(">M1</text>", svg)
         self.assertIn(">INV</text>", svg)
-        self.assertNotIn("linearGradient", svg)
+        self.assertIn('class="opcode-cell"', svg)
         self.assertIn('class="box-separator"', svg)
         for rung in bundle["rungs"]:
             self.check_geometry(rung)
