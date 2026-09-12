@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "title": "保持・立ち上がり・反転命令",
+  "comments": {
+    "X0": "運転開始",
+    "X1": "運転解除",
+    "X2": "許可条件1",
+    "X3": "許可条件2",
+    "Y0": "保持出力",
+    "M0": "反転結果",
+    "M1": "立ち上がりパルス"
+  },
+  "rungs": [
+    {
+      "id": "set_on_rise",
+      "title": "立ち上がりで保持",
+      "logic": {"device": "X0", "contact": "rising"},
+      "output": {"type": "set", "device": "Y0"}
+    },
+    {
+      "id": "reset_output",
+      "title": "保持を解除",
+      "logic": "X1",
+      "output": {"type": "rst", "device": "Y0"}
+    },
+    {
+      "id": "pulse_output",
+      "title": "条件成立の立ち上がりパルス",
+      "logic": "X2",
+      "output": {"type": "pls", "device": "M1"}
+    },
+    {
+      "id": "invert_result",
+      "title": "AND結果を反転",
+      "logic": {"inv": {"and": ["X2", "X3"]}},
+      "output": {"type": "coil", "device": "M0"}
+    }
+  ]
+}
