@@ -30,7 +30,8 @@ class KeyenceReferenceTests(unittest.TestCase):
                 self.assertEqual(connection.execute(
                     "SELECT COUNT(*) FROM instruction_sources"
                 ).fetchone()[0], sum(len(row["sources"]) for row in json.loads(
-                    (ROOT / "data" / "keyence_kv" / "instruction_differences.json").read_text()
+                    (ROOT / "data" / "keyence_kv" / "instruction_differences.json").read_text(
+                        encoding="utf-8")
                 )["mappings"]))
                 self.assertEqual(connection.execute(
                     "SELECT status FROM instruction_families WHERE id='timer-counter'"
