@@ -270,11 +270,15 @@ class CircuitTests(unittest.TestCase):
         for expr in invalid:
             with self.subTest(expr=expr), self.assertRaises(ValidationError):
                 parse_circuit(document(expr))
-        for kind in ["reset", "timer", "mov", "call"]:
+        for kind in ["reset", "timer", "call"]:
             doc = document()
             doc["rungs"][0]["output"]["type"] = kind
             with self.assertRaisesRegex(ValidationError, "output.type"):
                 parse_circuit(doc)
+        doc = document()
+        doc["rungs"][0]["output"] = {"type": "mov", "device": "D0"}
+        with self.assertRaises(ValidationError):
+            parse_circuit(doc)
         doc = document()
         doc["rungs"][0]["output"]["device"] = "X0"
         with self.assertRaises(ValidationError):
@@ -354,6 +358,38 @@ class CircuitTests(unittest.TestCase):
         self.assertIn(">DIFD</text>", svg)
         self.assertIn(">CON</text>", svg)
         self.assertNotIn("<circle", svg)
+
+    def test_compare_pid_and_move_are_preserved_and_rendered(self):
+        doc = {
+            "schema_version": 2,
+            "target": {"vendor": "melsec", "series": "iq-f"},
+            "comments": {"D100": "目標値", "D300": "PID出力", "D310": "位置指令"},
+            "rungs": [
+                {"id": "pid", "logic": {"and": [
+                    "M0", {"compare": {"operator": "<", "left": "D101", "right": "D100"}},
+                ]}, "output": {"type": "pid", "setpoint": "D100", "process_value": "D101",
+                               "parameters": "D200", "destination": "D300"}},
+                {"id": "move", "logic": "M0",
+                 "output": {"type": "mov", "source": "D300", "destination": "D310"}},
+            ],
+        }
+        circuit = parse_circuit(doc)
+        self.assertEqual(circuit.rungs[0].operands, ("D100", "D101", "D200", "D300"))
+        bundle = build_bundle(circuit)
+        self.assertTrue(any(node["kind"] == "predicate" and node["opcode"] == "<"
+                            for node in bundle["rungs"][0]["nodes"]))
+        self.assertEqual(bundle["rungs"][0]["output_condition"]["action"], "PID")
+        self.assertEqual(rung_text_records(circuit, comments=True)[0]["comments"]["D100"], "目標値")
+        svg = render_circuit(circuit)
+        ET.fromstring(svg)
+        self.assertIn(">PID</text>", svg)
+        self.assertIn(">D100 D101</text>", svg)
+        self.assertIn(">D200 D300</text>", svg)
+        self.assertIn(">MOV</text>", svg)
+        negated = parse_circuit(document({"not": {
+            "compare": {"operator": ">=", "left": "D101", "right": "D100"}
+        }}))
+        self.assertEqual(negated.rungs[0].logic.opcode, "<")
 
     def test_keyence_target_rejects_melsec_and_read_only_devices(self):
         doc = {

@@ -138,6 +138,7 @@ CLI入力のJSONは検証後にメモリ上の共通ASTへ変換されます。`
 | `{"and": ["X0", "X1"]}` | 両方が成立 | 直列 |
 | `{"or": ["X0", "X1"]}` | どちらかが成立 | 並列 |
 | `{"inv": {"and": ["X0", "X1"]}}` | そこまでの演算結果を反転 | INV命令 |
+| `{"compare": {"operator": ">=", "left": "D101", "right": "D100"}}` | 左辺が右辺以上 | 比較接点 |
 
 出力の`type`は通常コイルの`coil`、保持ONの`set`、デバイスをリセットする`rst`、
 条件の立ち上がり・立ち下がりで1スキャン出力する`pls`/`plf`を指定できます。SVGではMOVなどと同じセル構造で、
@@ -145,7 +146,11 @@ CLI入力のJSONは検証後にメモリ上の共通ASTへ変換されます。`
 対象デバイスとそのコメントを命令枠内へ表示します。
 INVはPLCの演算順序を明確にするため、`logic`の最外側だけで使用します。
 
+ワード制御では`pid`と`mov`を指定できます。三菱iQ-FのPIDは、目標値、測定値、
+パラメータ先頭、出力値の順で命令枠へ表示します。
+
 [命令サンプル](examples/instructions.json)には、立ち上がり接点→SET、RST、PLS、AND結果→INV→OUTを収録しています。
+[ロードセルPID押圧制御](examples/servo_force_pid.py)は、メモリ上のASTから直接SVGを生成します。
 
 複数の回路は`rungs`へ並べます。詳しい制約、正規化規則、入力上限は
 [回路JSON v1](docs/FORMAT_JA.md)を参照してください。
@@ -200,7 +205,8 @@ Path("basic.svg").write_text(render_circuit(circuit), encoding="utf-8")
 |---|---|
 | 接点 | a接点、b接点、立ち上がり接点、立ち下がり接点 |
 | 論理 | AND、OR、NOT、入れ子、最外側のINV |
-| 出力 | 各回路に1つのOUT、SET、RST、PLS、PLF（KVではRES、DIFU、DIFD） |
+| 比較 | ワードデバイス同士の`= <> < <= > >=` |
+| 出力 | 各回路に1つのOUT、SET、RST、PLS、PLF、PID、MOV（KVではRES、DIFU、DIFD） |
 | MELSEC接点デバイス | X、Y、M、L、B |
 | MELSEC OUT/SET/PLSの対象 | Y、M、L、B |
 | MELSEC RSTの対象 | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ |

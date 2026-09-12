@@ -89,7 +89,7 @@ def render_svg(bundle: dict) -> str:
             points = " ".join(f"{x},{y}" for x, y in edge["points"])
             lines.append(f'<polyline class="wire" data-connection="{esc(edge["connection"])}" points="{points}"/>')
         for node in rung["nodes"]:
-            if node["kind"] not in ("contact", "coil", "instruction", "inverter"):
+            if node["kind"] not in ("contact", "coil", "instruction", "predicate", "inverter"):
                 continue
             position = layout["nodes"][node["id"]]
             x, y = position["x"], position["y"]
@@ -102,7 +102,7 @@ def render_svg(bundle: dict) -> str:
             # OUT is circular. SET/RST are instruction boxes so their retained
             # action is not mistaken for an ordinary output coil.
             instruction_text = (f'{node["opcode"]} {" ".join(node["operands"])}'
-                                if node["kind"] == "instruction" else node["device"])
+                                if node["kind"] in ("instruction", "predicate") else node["device"])
             lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(instruction_text)} {esc(node["comment"])}</title>')
             if node["kind"] == "contact":
                 for contact_x in (x - CONTACT_HALF, x + CONTACT_HALF):
@@ -123,22 +123,29 @@ def render_svg(bundle: dict) -> str:
                     lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
             else:
                 box_left = x - INSTRUCTION_HALF
-                box_top = y - 29
+                operand_lines = [" ".join(node["operands"])]
+                box_height = 58
+                if len(node["operands"]) > 2:
+                    operand_lines = [" ".join(node["operands"][:2]), " ".join(node["operands"][2:])]
+                    box_height = 76
+                box_top = y - box_height / 2
                 box_width = INSTRUCTION_HALF * 2
                 opcode_width = CELL_W - 10
                 operand_x = box_left + opcode_width + (box_width - opcode_width) / 2
-                lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="58"/>')
-                lines.append(f'<rect class="opcode-cell" x="{box_left}" y="{box_top}" width="{opcode_width}" height="58"/>')
-                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="58"/>')
-                lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + 58}"/>')
+                lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="{box_height}"/>')
+                lines.append(f'<rect class="opcode-cell" x="{box_left}" y="{box_top}" width="{opcode_width}" height="{box_height}"/>')
+                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="{box_height}"/>')
+                lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + box_height}"/>')
                 lines.append(f'<text class="opcode" x="{box_left + opcode_width / 2}" y="{y + 5}">{esc(node["opcode"])}</text>')
-                lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16}">{esc(" ".join(node["operands"]))}</text>')
+                for index, value in enumerate(operand_lines):
+                    lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16 + index * 14}">{esc(value)}</text>')
+                comment_y = box_top + (52 if len(operand_lines) > 1 else 37)
                 for index, value in enumerate(comment_lines(node["comment"])):
                     if value:
-                        lines.append(f'<text class="comment" x="{operand_x}" y="{box_top + 37 + index * 13}">{esc(value)}</text>')
-            label_offset = 30 if node["kind"] in ("coil", "instruction") else 24
-            comment_offset = 40 if node["kind"] in ("coil", "instruction") else 30
-            if node["kind"] != "instruction":
+                        lines.append(f'<text class="comment" x="{operand_x}" y="{comment_y + index * 13}">{esc(value)}</text>')
+            label_offset = 30 if node["kind"] in ("coil", "instruction", "predicate") else 24
+            comment_offset = 40 if node["kind"] in ("coil", "instruction", "predicate") else 30
+            if node["kind"] not in ("instruction", "predicate"):
                 lines.append(f'<text class="label" x="{x}" y="{y - label_offset}">{esc(short(node["device"], 14))}</text>')
                 for index, value in enumerate(comment_lines(node["comment"])):
                     if value:

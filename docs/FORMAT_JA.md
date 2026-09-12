@@ -26,7 +26,7 @@ SVGはこのASTから導出します。SVGは描画用JSONの明示的な接続�
 | id | はい | 文書内で一意。英字開始、英数字・_・-、48文字以内 |
 | title | いいえ | 図に表示する回路名、160文字以内 |
 | logic | はい | 下記の条件構造 |
-| output | はい | device必須。typeはcoil（省略時）、set、rst、pls、plf |
+| output | はい | coil、set、rst、pls、plf、pid、movのいずれか |
 
 条件の例:
 
@@ -42,6 +42,26 @@ SVGはこのASTから導出します。SVGは描画用JSONの明示的な接続�
 `{"or": ["X0", "X1"]}` は並列で、各2項以上。入れ子にできます。
 `{"inv": {"and": ["X0", "X1"]}}` は条件を評価した後にINV命令で演算結果を反転します。
 INVは`logic`の最外側だけで使用できます。途中に置くとPLCの演算順序に依存するため拒否します。
+`{"compare": {"operator": ">=", "left": "D101", "right": "D100"}}`は、
+ワードデバイス同士を`= <> < <= > >=`のいずれかで比較する接点です。
+
+三菱iQ-FのPID出力は次の意味属性で指定します。
+
+```json
+{
+  "type": "pid",
+  "setpoint": "D100",
+  "process_value": "D101",
+  "parameters": "D200",
+  "destination": "D300"
+}
+```
+
+SVGでは`PID D100 D101 D200 D300`となります。三菱電機の公式仕様どおり、順に目標値(SV)、
+測定値(PV)、パラメータ先頭、出力値(MV)です。オートチューニングなしでもパラメータ先頭から
+25点を占有するため、他用途と重ならない領域を指定します。
+
+MOVは`{"type":"mov","source":"D300","destination":"D310"}`で指定します。
 
 v1およびMELSEC iQ-Fモードでは、接点にX/Y/M/L/B、OUT/SET/PLSの対象にY/M/L/Bを使えます。
 RSTは直接デバイスのX/Y/M/L/SM/F/B/SB/S/T/ST/C/D/W/SD/SW/R/Z/LC/LZを対象にできます。
@@ -94,6 +114,8 @@ CLIの`--target keyence-kv-x`で対象を上書きできる。保存・再利用
 | rst | RST | RES | 条件成立時に対象デバイスをリセット |
 | pls | PLS | DIFU | 条件の不成立→成立時に1スキャン出力 |
 | plf | PLF | DIFD | 条件の成立→不成立時に1スキャン出力 |
+| pid | PID | PID | 目標値と測定値から操作量を演算 |
+| mov | MOV | MOV | ワード値を転送 |
 
 未知項目、空のAND/OR、重複回路ID、正規化後に重複するコメントキー、
 XMLに含められない制御文字は拒否します。
