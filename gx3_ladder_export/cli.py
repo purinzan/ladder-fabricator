@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 import sys
 
-from . import ValidationError, parse_circuit, build_bundle, render_svg
+from . import (
+    ValidationError, build_bundle, circuit_to_ast, parse_circuit,
+    render_rung_text, render_svg,
+)
 
 MAX_INPUT_BYTES = 1_048_576
 
@@ -20,9 +23,17 @@ def unique_object(pairs: list[tuple[str, object]]) -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validated ladder circuit JSON to SVG or structured connections.")
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Keep the original input-first CLI while offering the familiar compact
+    # reading command: ladder-fabricator rung-text circuit.json --comments.
+    if argv[:1] == ["rung-text"]:
+        argv = [*argv[1:], "--format", "rung-text"]
+    parser = argparse.ArgumentParser(description="Validated ladder AST to rung text, SVG, or structured connections.")
     parser.add_argument("input", type=Path, help="version 1 or 2 circuit JSON")
-    parser.add_argument("--format", choices=("svg", "json"), default="svg")
+    parser.add_argument("--format", choices=("svg", "json", "ast", "rung-text"), default="svg",
+                        help="json is the derived render bundle; ast is normalized and reusable")
+    parser.add_argument("--comments", action="store_true",
+                        help="append referenced device comments to rung-text output")
     parser.add_argument("--target", choices=("melsec-iq-f", "keyence-kv-x"),
                         help="override the target stored in the circuit JSON")
     parser.add_argument("-o", "--output", type=Path)
@@ -37,6 +48,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ValidationError("--output", "must not overwrite the input circuit")
         if args.validate_only and args.output:
             raise ValidationError("--output", "cannot be used with --validate-only")
+        if args.comments and args.format != "rung-text":
+            raise ValidationError("--comments", "requires --format rung-text")
         with args.input.open("rb") as stream:
             raw = stream.read(MAX_INPUT_BYTES + 1)
         if len(raw) > MAX_INPUT_BYTES:
@@ -46,8 +59,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.validate_only:
             print(f"valid: {len(circuit.rungs)} rung(s); structural relay checks only")
             return 0
-        bundle = build_bundle(circuit)
-        content = json.dumps(bundle, ensure_ascii=False, indent=2) if args.format == "json" else render_svg(bundle)
+        if args.format == "ast":
+            content = json.dumps(circuit_to_ast(circuit), ensure_ascii=False, indent=2)
+        elif args.format == "rung-text":
+            content = render_rung_text(circuit, comments=args.comments)
+        else:
+            bundle = build_bundle(circuit)
+            content = json.dumps(bundle, ensure_ascii=False, indent=2) if args.format == "json" else render_svg(bundle)
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(content + "\n", encoding="utf-8")

@@ -150,7 +150,10 @@ def parse_circuit(payload: Any, target_override: str | None = None) -> Circuit:
             raise ValidationError(path, "expected exactly one of and/or/not/inv")
         op = next(iter(raw))
         if op == "not":
-            return expression(raw[op], path + ".not", identifier + "-n", depth + 1,
+            # NOT is normalized into contact polarity and De Morgan operators.
+            # Keep IDs tied to the resulting semantic position, so an input
+            # using NOT and its canonical AST serialize to the same nodes.
+            return expression(raw[op], path + ".not", identifier, depth + 1,
                               not negate, False)
         if op == "inv":
             if not allow_inv or negate:
