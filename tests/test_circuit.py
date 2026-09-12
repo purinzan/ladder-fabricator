@@ -21,23 +21,30 @@ def document(logic="X0", **extra):
     ], **extra}
 
 
-def requested_value(expr, state):
+def requested_value(expr, state, previous=None):
     """Evaluate the user's input directly, without product normalization."""
+    previous = previous or {}
     if isinstance(expr, str):
         return state[expr]
     if "device" in expr:
-        return state[expr["device"]] != (expr.get("contact", "a") == "b")
+        role = expr.get("contact", "a")
+        if role == "rising":
+            return state[expr["device"]] and not previous.get(expr["device"], False)
+        return state[expr["device"]] != (role == "b")
     if "not" in expr:
-        return not requested_value(expr["not"], state)
+        return not requested_value(expr["not"], state, previous)
+    if "inv" in expr:
+        return not requested_value(expr["inv"], state, previous)
     if "and" in expr:
-        return all(requested_value(x, state) for x in expr["and"])
+        return all(requested_value(x, state, previous) for x in expr["and"])
     if "or" in expr:
-        return any(requested_value(x, state) for x in expr["or"])
+        return any(requested_value(x, state, previous) for x in expr["or"])
     raise AssertionError(expr)
 
 
-def graph_value(rung, state):
+def graph_value(rung, state, previous=None):
     """Evaluate connectivity only: joins are OR, contacts gate incoming flow."""
+    previous = previous or {}
     incoming = {node["id"]: [] for node in rung["nodes"]}
     for edge in rung["connections"]:
         incoming[edge["to"]["node"]].append(edge["from"]["node"])
@@ -50,7 +57,13 @@ def graph_value(rung, state):
                 continue
             power = node["kind"] == "left_rail" or any(values[source] for source in incoming[key])
             if node["kind"] == "contact":
-                power = power and (state[node["device"]] != (node["contact"] == "b"))
+                if node["contact"] == "rising":
+                    contact = state[node["device"]] and not previous.get(node["device"], False)
+                else:
+                    contact = state[node["device"]] != (node["contact"] == "b")
+                power = power and contact
+            elif node["kind"] == "inverter":
+                power = not power
             values[key] = power
             del pending[key]
             progressed = True
@@ -102,7 +115,8 @@ class CircuitTests(unittest.TestCase):
             for end, name in [(0, "from"), (-1, "to")]:
                 node = nodes[edge[name]["node"]]
                 pos = positions[node["id"]]
-                half = {"contact": 17, "coil": 22}.get(node["kind"], 0)
+                half = {"contact": 17, "coil": 22, "instruction": 34,
+                        "inverter": 24}.get(node["kind"], 0)
                 self.assertEqual(path["points"][end], [pos["x"] + (half if end == 0 else -half), pos["y"]])
             for a, b in zip(path["points"], path["points"][1:]):
                 self.assertTrue(a[0] == b[0] or a[1] == b[1])
@@ -125,17 +139,63 @@ class CircuitTests(unittest.TestCase):
         self.assertEqual(sum(e.attrib.get("class") == "mark" for e in root.iter()), 1)
         self.check_geometry(bundle["rungs"][0])
 
+    def test_set_rst_rising_and_inv_are_preserved_and_rendered(self):
+        doc = {
+            "schema_version": 1,
+            "comments": {"X0": "起動パルス", "X1": "解除条件", "Y0": "保持出力"},
+            "rungs": [
+                {"id": "set_on_rise", "logic": {"device": "X0", "contact": "rising"},
+                 "output": {"type": "set", "device": "Y0"}},
+                {"id": "reset", "logic": "X1", "output": {"type": "rst", "device": "Y0"}},
+                {"id": "pulse", "logic": "X0", "output": {"type": "pls", "device": "M1"}},
+                {"id": "inverted", "logic": {"inv": {"and": ["X0", "X1"]}},
+                 "output": {"device": "M0"}},
+            ],
+        }
+        circuit = parse_circuit(doc)
+        self.assertEqual([rung.output_type for rung in circuit.rungs], ["set", "rst", "pls", "coil"])
+        bundle = build_bundle(circuit)
+        self.assertEqual([rung["output_condition"]["action"] for rung in bundle["rungs"]],
+                         ["SET", "RST", "PLS", "OUT"])
+        self.assertEqual(bundle["rungs"][0]["output_condition"]["logic"]["contact"], "rising")
+        self.assertEqual(bundle["rungs"][3]["output_condition"]["logic"]["op"], "inv")
+        self.assertTrue(any(node["kind"] == "instruction" and node["opcode"] == "SET"
+                            for node in bundle["rungs"][0]["nodes"]))
+        self.assertTrue(any(node["kind"] == "inverter"
+                            for node in bundle["rungs"][3]["nodes"]))
+
+        states = [False, False, True, True, False, True]
+        previous = False
+        observed = []
+        for current in states:
+            observed.append(graph_value(bundle["rungs"][0], {"X0": current}, {"X0": previous}))
+            previous = current
+        self.assertEqual(observed, [False, False, True, False, False, True])
+        for x0, x1 in itertools.product([False, True], repeat=2):
+            state = {"X0": x0, "X1": x1}
+            self.assertEqual(graph_value(bundle["rungs"][3], state), not (x0 and x1))
+
+        svg = render_svg(bundle)
+        ET.fromstring(svg)
+        self.assertIn(">SET</text>", svg)
+        self.assertIn(">RST</text>", svg)
+        self.assertIn(">PLS</text>", svg)
+        self.assertIn(">INV</text>", svg)
+        for rung in bundle["rungs"]:
+            self.check_geometry(rung)
+
     def test_unknown_and_unsupported_inputs_fail(self):
         invalid = [
             {}, {"device": "X0", "typo": 1}, {"and": []}, {"or": ["X0"]},
             {"and": ["X0", "X1"], "or": ["X2", "X3"]},
-            {"xor": ["X0", "X1"]}, {"device": "X0", "contact": "rising"},
+            {"xor": ["X0", "X1"]}, {"device": "X0", "contact": "falling"},
+            {"and": ["X0", {"inv": "X1"}]}, {"not": {"device": "X0", "contact": "rising"}},
             "D0", "T0", "Unknown1", "M1Z2", "D0.1", "X-1", "X+1", 1, True,
         ]
         for expr in invalid:
             with self.subTest(expr=expr), self.assertRaises(ValidationError):
                 parse_circuit(document(expr))
-        for kind in ["set", "rst", "pls", "timer", "mov", "call"]:
+        for kind in ["reset", "timer", "mov", "call"]:
             doc = document()
             doc["rungs"][0]["output"]["type"] = kind
             with self.assertRaisesRegex(ValidationError, "output.type"):
@@ -217,10 +277,12 @@ class CircuitTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
 
     def test_example_is_valid(self):
-        data = json.loads((ROOT / "examples/basic.json").read_text(encoding="utf-8"))
-        bundle = build_bundle(parse_circuit(data))
-        self.assertEqual(len(bundle["rungs"]), 1)
-        ET.fromstring(render_svg(bundle))
+        for name, rung_count in [("basic.json", 1), ("instructions.json", 4)]:
+            with self.subTest(name=name):
+                data = json.loads((ROOT / "examples" / name).read_text(encoding="utf-8"))
+                bundle = build_bundle(parse_circuit(data))
+                self.assertEqual(len(bundle["rungs"]), rung_count)
+                ET.fromstring(render_svg(bundle))
 
 
 if __name__ == "__main__":

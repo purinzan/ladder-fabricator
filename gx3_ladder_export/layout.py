@@ -15,11 +15,16 @@ HEADER_H = 58
 FOOTER_H = 32
 CONTACT_HALF = 17
 COIL_HALF = 22
+INSTRUCTION_HALF = 34
+INVERTER_HALF = 24
 
 
 def extent(expr: Expr) -> tuple[int, int]:
     if expr.op == "contact":
         return 1, 1
+    if expr.op == "inv":
+        width, height = extent(expr.args[0])
+        return width + 1, height
     sizes = [extent(child) for child in expr.args]
     if expr.op == "and":
         return sum(w for w, _ in sizes), max(h for _, h in sizes)
@@ -48,7 +53,12 @@ class Builder:
     def port(self, identifier: str, side: str) -> list[float]:
         node = self.nodes[identifier]
         point = self.positions[identifier]
-        half = CONTACT_HALF if node["kind"] == "contact" else COIL_HALF if node["kind"] == "coil" else 0
+        half = {
+            "contact": CONTACT_HALF,
+            "coil": COIL_HALF,
+            "instruction": INSTRUCTION_HALF,
+            "inverter": INVERTER_HALF,
+        }.get(node["kind"], 0)
         return [point["x"] + (half if side == "out" else -half), point["y"]]
 
     def connect(self, source: str, target: str, via: list[list[float]] | None = None) -> None:
@@ -75,6 +85,13 @@ class Builder:
                                   device=expr.device, contact=expr.contact,
                                   comment=self.comments.get(expr.device, ""))
             return identifier, identifier
+        if expr.op == "inv":
+            child = expr.args[0]
+            entry, exit_node = self.place(child, x, y)
+            width, _ = extent(child)
+            inverter = self.add(expr.id, "inverter", x + width + 0.5, y, opcode="INV")
+            self.connect(exit_node, inverter)
+            return entry, inverter
         if expr.op == "and":
             first = previous = ""
             for child in expr.args:
@@ -109,8 +126,10 @@ def build_bundle(circuit: Circuit) -> dict:
         builder = Builder(comments, offset)
         left = builder.add(rung.id + ":left", "left_rail", 0, 0)
         entry, exit_node = builder.place(rung.logic, 1, 0)
-        coil = builder.add(rung.id + ":output", "coil", columns - 0.5, 0,
-                           device=rung.output, opcode="OUT", comment=comments.get(rung.output, ""))
+        opcode = {"coil": "OUT", "set": "SET", "rst": "RST", "pls": "PLS"}[rung.output_type]
+        output_kind = "coil" if rung.output_type == "coil" else "instruction"
+        coil = builder.add(rung.id + ":output", output_kind, columns - 0.5, 0,
+                           device=rung.output, opcode=opcode, comment=comments.get(rung.output, ""))
         right = builder.add(rung.id + ":right", "right_rail", columns, 0)
         builder.connect(left, entry)
         builder.connect(exit_node, coil)
@@ -122,7 +141,7 @@ def build_bundle(circuit: Circuit) -> dict:
             "id": rung.id, "title": rung.title,
             "nodes": list(builder.nodes.values()),
             "connections": builder.connections,
-            "output_condition": {"output": coil, "logic": condition(rung.logic)},
+            "output_condition": {"output": coil, "action": opcode, "logic": condition(rung.logic)},
             "layout": {
                 "nodes": builder.positions, "connections": builder.paths,
                 "rails": [{"node": node, "x": builder.positions[node]["x"], "y1": rail_top, "y2": rail_bottom}
@@ -135,5 +154,8 @@ def build_bundle(circuit: Circuit) -> dict:
         "schema": "gx3-ladder-export/render-bundle", "schema_version": 1,
         "title": circuit.title, "width": columns * CELL_W + RAIL_PAD * 2,
         "height": offset, "rungs": rungs,
-        "limitations": ["Static relay logic only; no PLC execution or live values."],
+        "limitations": [
+            "Rendering only; no PLC execution or live values.",
+            "Rising contacts and PLS require a previous scan result; SET/RST retain PLC device state.",
+        ],
     }

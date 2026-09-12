@@ -80,6 +80,7 @@ class Rung:
     title: str
     logic: Expr
     output: str
+    output_type: str
 
 
 @dataclass(frozen=True)
@@ -111,7 +112,8 @@ def parse_circuit(payload: Any) -> Circuit:
 
     count = 0
 
-    def expression(raw: Any, path: str, identifier: str, depth: int = 0, negate: bool = False) -> Expr:
+    def expression(raw: Any, path: str, identifier: str, depth: int = 0,
+                   negate: bool = False, allow_inv: bool = True) -> Expr:
         nonlocal count
         count += 1
         if count > MAX_NODES:
@@ -125,24 +127,34 @@ def parse_circuit(payload: Any) -> Circuit:
         if "device" in raw:
             leaf = fields(raw, {"device", "contact"}, {"device"}, path)
             role = leaf.get("contact", "a")
-            if role not in ("a", "b"):
-                raise ValidationError(path + ".contact", "expected a or b; edge contacts are unsupported")
+            if role not in ("a", "b", "rising"):
+                raise ValidationError(path + ".contact", "expected a, b, or rising")
             if negate:
+                if role == "rising":
+                    raise ValidationError(path + ".contact", "rising contacts cannot be negated")
                 role = "b" if role == "a" else "a"
             return Expr(identifier, "contact", device=device(leaf["device"], path + ".device"), contact=role)
-        fields(raw, {"and", "or", "not"}, set(), path)
+        fields(raw, {"and", "or", "not", "inv"}, set(), path)
         if len(raw) != 1:
-            raise ValidationError(path, "expected exactly one of and/or/not")
+            raise ValidationError(path, "expected exactly one of and/or/not/inv")
         op = next(iter(raw))
         if op == "not":
-            return expression(raw[op], path + ".not", identifier + "-n", depth + 1, not negate)
+            return expression(raw[op], path + ".not", identifier + "-n", depth + 1,
+                              not negate, False)
+        if op == "inv":
+            if not allow_inv or negate:
+                raise ValidationError(path + ".inv", "INV is supported only as the outermost logic operation")
+            child = expression(raw[op], path + ".inv", identifier + "-source", depth + 1,
+                               False, False)
+            return Expr(identifier, "inv", (child,))
         children = raw[op]
         if not isinstance(children, list) or not 2 <= len(children) <= MAX_NODES:
             raise ValidationError(path + "." + op, f"expected 2..{MAX_NODES} operands")
         # De Morgan normalization preserves tree size; no Cartesian expansion.
         normalized = ("or" if op == "and" else "and") if negate else op
         return Expr(identifier, normalized, tuple(
-            expression(child, f"{path}.{op}[{index}]", f"{identifier}-{index}", depth + 1, negate)
+            expression(child, f"{path}.{op}[{index}]", f"{identifier}-{index}",
+                       depth + 1, negate, False)
             for index, child in enumerate(children)
         ))
 
@@ -156,12 +168,14 @@ def parse_circuit(payload: Any) -> Circuit:
             raise ValidationError(path + ".id", "expected a unique identifier starting with a letter (letters/digits/_/-)")
         seen.add(identifier)
         output = fields(raw["output"], {"type", "device"}, {"device"}, path + ".output")
-        if output.get("type", "coil") != "coil":
-            raise ValidationError(path + ".output.type", "only coil (OUT) is supported in version 1")
+        output_type = output.get("type", "coil")
+        if output_type not in ("coil", "set", "rst", "pls"):
+            raise ValidationError(path + ".output.type", "expected coil (OUT), set, rst, or pls")
         rungs.append(Rung(
             identifier, text(raw.get("title", ""), path + ".title", 160),
             expression(raw["logic"], path + ".logic", identifier + ":logic"),
             device(output["device"], path + ".output.device", output=True),
+            output_type,
         ))
     return Circuit(title, tuple(rungs), tuple(comments.items()))
 
@@ -169,4 +183,6 @@ def parse_circuit(payload: Any) -> Circuit:
 def condition(expr: Expr) -> dict:
     if expr.op == "contact":
         return {"op": "contact", "node": expr.id, "device": expr.device, "contact": expr.contact}
+    if expr.op == "inv":
+        return {"op": "inv", "node": expr.id, "args": [condition(expr.args[0])]}
     return {"op": expr.op, "args": [condition(child) for child in expr.args]}
