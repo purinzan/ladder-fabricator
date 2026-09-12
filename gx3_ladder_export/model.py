@@ -63,6 +63,8 @@ class Expr:
     args: tuple[Expr, ...] = ()
     device: str = ""
     contact: str = "a"
+    opcode: str = ""
+    operands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -72,6 +74,7 @@ class Rung:
     logic: Expr
     output: str
     output_type: str
+    operands: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -145,10 +148,21 @@ def parse_circuit(payload: Any, target_override: str | None = None) -> Circuit:
                 role = "b" if role == "a" else "a"
             return Expr(identifier, "contact", device=device(
                 leaf["device"], path + ".device", profile, allowed=profile.contact_types), contact=role)
-        fields(raw, {"and", "or", "not", "inv"}, set(), path)
+        fields(raw, {"and", "or", "not", "inv", "compare"}, set(), path)
         if len(raw) != 1:
             raise ValidationError(path, "expected exactly one of and/or/not/inv")
         op = next(iter(raw))
+        if op == "compare":
+            comparison = fields(raw[op], {"operator", "left", "right"},
+                                {"operator", "left", "right"}, path + ".compare")
+            operator = comparison["operator"]
+            if operator not in ("=", "<>", "<", "<=", ">", ">="):
+                raise ValidationError(path + ".compare.operator", "expected =, <>, <, <=, >, or >=")
+            if negate:
+                operator = {"=": "<>", "<>": "=", "<": ">=", "<=": ">", ">": "<=", ">=": "<"}[operator]
+            operands = tuple(device(comparison[name], path + f".compare.{name}", profile,
+                                    allowed=profile.word_types) for name in ("left", "right"))
+            return Expr(identifier, "predicate", opcode=operator, operands=operands)
         if op == "not":
             # NOT is normalized into contact polarity and De Morgan operators.
             # Keep IDs tied to the resulting semantic position, so an input
@@ -181,16 +195,34 @@ def parse_circuit(payload: Any, target_override: str | None = None) -> Circuit:
         if not ID_RE.fullmatch(identifier) or identifier in seen:
             raise ValidationError(path + ".id", "expected a unique identifier starting with a letter (letters/digits/_/-)")
         seen.add(identifier)
-        output = fields(raw["output"], {"type", "device"}, {"device"}, path + ".output")
-        output_type = output.get("type", "coil")
-        if output_type not in ("coil", "set", "rst", "pls", "plf"):
-            raise ValidationError(path + ".output.type", "expected coil (OUT), set, rst, pls, or plf")
+        raw_output = raw["output"]
+        if not isinstance(raw_output, dict):
+            raise ValidationError(path + ".output", "expected an object")
+        output_type = raw_output.get("type", "coil")
+        if output_type not in ("coil", "set", "rst", "pls", "plf", "pid", "mov"):
+            raise ValidationError(path + ".output.type", "expected coil, set, rst, pls, plf, pid, or mov")
+        if output_type == "pid":
+            output = fields(raw_output, {"type", "setpoint", "process_value", "parameters", "destination"},
+                            {"type", "setpoint", "process_value", "parameters", "destination"}, path + ".output")
+            operands = tuple(device(output[name], path + f".output.{name}", profile,
+                                    allowed=profile.word_types)
+                             for name in ("setpoint", "process_value", "parameters", "destination"))
+            output_device = operands[-1]
+        elif output_type == "mov":
+            output = fields(raw_output, {"type", "source", "destination"},
+                            {"type", "source", "destination"}, path + ".output")
+            operands = tuple(device(output[name], path + f".output.{name}", profile,
+                                    allowed=profile.word_types) for name in ("source", "destination"))
+            output_device = operands[-1]
+        else:
+            output = fields(raw_output, {"type", "device"}, {"device"}, path + ".output")
+            operands = ()
+            output_device = device(output["device"], path + ".output.device", profile,
+                                   allowed=(profile.reset_types if output_type == "rst" else profile.bit_output_types))
         rungs.append(Rung(
             identifier, text(raw.get("title", ""), path + ".title", 160),
             expression(raw["logic"], path + ".logic", identifier + ":logic"),
-            device(output["device"], path + ".output.device", profile,
-                   allowed=(profile.reset_types if output_type == "rst" else profile.bit_output_types)),
-            output_type,
+            output_device, output_type, operands,
         ))
     return Circuit(title, tuple(rungs), tuple(comments.items()), profile.id)
 
@@ -200,4 +232,7 @@ def condition(expr: Expr) -> dict:
         return {"op": "contact", "node": expr.id, "device": expr.device, "contact": expr.contact}
     if expr.op == "inv":
         return {"op": "inv", "node": expr.id, "args": [condition(expr.args[0])]}
+    if expr.op == "predicate":
+        return {"op": "predicate", "node": expr.id, "opcode": expr.opcode,
+                "operands": list(expr.operands)}
     return {"op": expr.op, "args": [condition(child) for child in expr.args]}

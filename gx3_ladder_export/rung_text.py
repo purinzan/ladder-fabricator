@@ -16,6 +16,8 @@ def _condition_text(expr: Expr, parent_precedence: int = 0) -> str:
         if expr.contact == "rising":
             return f"RISING({expr.device})"
         return f"FALLING({expr.device})"
+    if expr.op == "predicate":
+        return f"{expr.opcode} {' '.join(expr.operands)}"
     if expr.op == "inv":
         return f"INV({_condition_text(expr.args[0])})"
     precedence = 2 if expr.op == "and" else 1
@@ -26,6 +28,8 @@ def _condition_text(expr: Expr, parent_precedence: int = 0) -> str:
 def _referenced_devices(expr: Expr) -> list[str]:
     if expr.op == "contact":
         return [expr.device]
+    if expr.op == "predicate":
+        return list(expr.operands)
     devices: list[str] = []
     for child in expr.args:
         for device in _referenced_devices(child):
@@ -40,7 +44,7 @@ def rung_text_records(circuit: Circuit, *, comments: bool = False) -> list[dict]
     comment_map = dict(circuit.comments)
     records = []
     for rung in circuit.rungs:
-        devices = [*_referenced_devices(rung.logic), rung.output]
+        devices = [*_referenced_devices(rung.logic), *(rung.operands or (rung.output,))]
         visible_comments = {
             device: comment_map[device]
             for device in dict.fromkeys(devices)
@@ -52,6 +56,7 @@ def rung_text_records(circuit: Circuit, *, comments: bool = False) -> list[dict]
             "condition": _condition_text(rung.logic),
             "opcode": profile.output_opcodes[rung.output_type],
             "device": rung.output,
+            "operands": list(rung.operands) or [rung.output],
         }
         if comments:
             record["comments"] = visible_comments
@@ -67,7 +72,7 @@ def render_rung_text(circuit: Circuit, *, comments: bool = False) -> str:
             lines.extend(([f"# {record['title']}"] if not lines else ["", f"# {record['title']}"]))
         output = record["device"]
         if record["opcode"] != "OUT":
-            output = f"{record['opcode']} {output}"
+            output = f"{record['opcode']} {' '.join(record['operands'])}"
         line = f"{record['id']}  {record['condition']} -> {output}"
         if comments and record["comments"]:
             rendered = ", ".join(

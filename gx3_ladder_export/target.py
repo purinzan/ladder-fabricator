@@ -16,6 +16,7 @@ class TargetProfile:
     contact_types: frozenset[str]
     bit_output_types: frozenset[str]
     reset_types: frozenset[str]
+    word_types: frozenset[str]
     output_opcodes: dict[str, str]
     inverter_opcode: str
 
@@ -32,7 +33,9 @@ MELSEC_IQ_F = TargetProfile(
         "X", "Y", "M", "L", "SM", "F", "B", "SB", "S",
         "T", "ST", "C", "D", "W", "SD", "SW", "R", "Z", "LC", "LZ",
     }),
-    output_opcodes={"coil": "OUT", "set": "SET", "rst": "RST", "pls": "PLS", "plf": "PLF"},
+    word_types=frozenset({"D", "W", "SD", "SW", "R", "Z"}),
+    output_opcodes={"coil": "OUT", "set": "SET", "rst": "RST", "pls": "PLS", "plf": "PLF",
+                    "pid": "PID", "mov": "MOV"},
     inverter_opcode="INV",
 )
 
@@ -41,7 +44,9 @@ KEYENCE_KV_X = TargetProfile(
     contact_types=frozenset({"R", "B", "MR", "LR", "CR", "T", "C"}),
     bit_output_types=frozenset({"R", "B", "MR", "LR"}),
     reset_types=frozenset({"R", "B", "MR", "LR", "T", "C", "DM", "EM", "FM", "ZF", "W", "TM"}),
-    output_opcodes={"coil": "OUT", "set": "SET", "rst": "RES", "pls": "DIFU", "plf": "DIFD"},
+    word_types=frozenset({"DM", "EM", "FM", "ZF", "W", "TM"}),
+    output_opcodes={"coil": "OUT", "set": "SET", "rst": "RES", "pls": "DIFU", "plf": "DIFD",
+                    "pid": "PID", "mov": "MOV"},
     inverter_opcode="CON",
 )
 

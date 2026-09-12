@@ -27,6 +27,8 @@ INVERTER_HALF = 24
 def extent(expr: Expr) -> tuple[int, int]:
     if expr.op == "contact":
         return 1, 1
+    if expr.op == "predicate":
+        return 2, 1
     if expr.op == "inv":
         width, height = extent(expr.args[0])
         return width + 1, height
@@ -63,6 +65,7 @@ class Builder:
             "contact": CONTACT_HALF,
             "coil": COIL_HALF,
             "instruction": INSTRUCTION_HALF,
+            "predicate": INSTRUCTION_HALF,
             "inverter": INVERTER_HALF,
         }.get(node["kind"], 0)
         return [point["x"] + (half if side == "out" else -half), point["y"]]
@@ -90,6 +93,10 @@ class Builder:
             identifier = self.add(expr.id, "contact", x + 0.5, y,
                                   device=expr.device, contact=expr.contact,
                                   comment=self.comments.get(expr.device, ""))
+            return identifier, identifier
+        if expr.op == "predicate":
+            identifier = self.add(expr.id, "predicate", x + 1, y,
+                                  opcode=expr.opcode, operands=list(expr.operands), comment="")
             return identifier, identifier
         if expr.op == "inv":
             child = expr.args[0]
@@ -138,8 +145,9 @@ def build_bundle(circuit: Circuit) -> dict:
         opcode = profile.output_opcodes[rung.output_type]
         output_kind = "coil" if rung.output_type == "coil" else "instruction"
         output_x = columns - (1 if output_kind == "instruction" else 0.5)
+        operands = list(rung.operands) or [rung.output]
         coil = builder.add(rung.id + ":output", output_kind, output_x, 0,
-                           device=rung.output, opcode=opcode, operands=[rung.output],
+                           device=rung.output, opcode=opcode, operands=operands,
                            comment=comments.get(rung.output, ""))
         right = builder.add(rung.id + ":right", "right_rail", columns, 0)
         builder.connect(left, entry)
