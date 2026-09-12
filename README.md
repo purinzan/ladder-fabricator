@@ -176,6 +176,24 @@ python -m build --wheel
 CIはWindows、Linux、macOSのPython 3.10と3.12で実行します。真理値、生成接続、
 SVGの端点、共有接点、入力上限、文字エスケープ、実CLIを検証しています。
 
+## KEYENCE KV版の調査データ
+
+KV-Xを主対象とするメーカー別出力の準備として、公式マニュアル群、命令分類、
+GX Works3との命令差分、KVデバイス体系を`data/keyence_kv/`に収録しています。
+登録制PDFそのものや利用者の登録情報はリポジトリへ入れません。
+
+検索用SQLiteは標準ライブラリだけで生成できます。
+
+```powershell
+python tools/build_keyence_reference_db.py
+sqlite3 reference/keyence/kv_reference.sqlite3 "SELECT concept_ja, gx3_json, kv_json FROM instruction_mappings WHERE relation <> 'same';"
+```
+
+現在は基本回路と意味差が大きい命令を確認済み中核として収録しています。現行KV-Xの
+全命令・全型サフィックス・CPU別制限は、公式コマンドリファレンス取得後に同じDBへ追加します。
+調査範囲、根拠資料、設計への反映方法は
+[KEYENCE KV版の命令・デバイス調査](docs/KEYENCE_KV_RESEARCH_JA.md)を参照してください。
+
 - [入力形式と出力仕様](docs/FORMAT_JA.md)
 - [流用調査と設計方針](docs/REUSE_AUDIT_JA.md)
 - [GX Works3表示の測定基準](docs/GX_WORKS3_VISUAL_REFERENCE_JA.md)

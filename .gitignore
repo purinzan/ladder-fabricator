@@ -9,4 +9,7 @@ outputs/
 *.gtx
 *.db
 *.sqlite
+*.sqlite3
+reference/keyence/manuals/*.pdf
+reference/keyence/manuals/*.txt
 .DS_Store
