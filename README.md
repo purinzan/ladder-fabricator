@@ -5,6 +5,17 @@
 
 Pythonパッケージ名とCLIコマンドは`gx3-ladder-export`です。
 
+## 対応PLCモード
+
+| モード | 対象環境 | SVGで使う主な命令表記 |
+|---|---|---|
+| 三菱電機モード | MELSEC iQ-F / GX Works3 | OUT、SET、RST、PLS、PLF、INV |
+| KEYENCEモード | KV-X / KV STUDIO | OUT、SET、RES、DIFU、DIFD、CON |
+
+同じ中間形式の論理・接続構造を使い、指定したモードに応じてデバイス検証、命令名、
+SVGの表現を切り替えます。従来の`schema_version: 1`は三菱電機モードとして扱い、
+`schema_version: 2`では`target`に三菱電機またはKEYENCEを明示できます。
+
 GX Works3やGX3ファイルを使わず、依頼内容から作った小さなJSONだけでラダー図を生成できます。
 座標や配線を手書きする必要はありません。Python 3.10以上で動作し、実行時の追加依存もありません。
 
