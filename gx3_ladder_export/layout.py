@@ -7,14 +7,16 @@ from __future__ import annotations
 
 from .model import Circuit, Expr, condition
 
-# Adapted from gx3-cli-mcp/gx3_ladder_layout.py, with more room for comments.
-CELL_W = 120
-CELL_H = 96
+# Calibrated against the ladder-editor figure in GX Works3 Operating Manual
+# SH-081215ENG-AS, p.369. These are SVG/CSS pixels for the reference profile;
+# the renderer keeps all strokes non-scaling so a 1 px line stays 1 px.
+CELL_W = 104
+CELL_H = 86
 RAIL_PAD = 32
-HEADER_H = 58
-FOOTER_H = 32
+HEADER_H = 44
+FOOTER_H = 22
 CONTACT_HALF = 17
-COIL_HALF = 22
+COIL_HALF = 12
 # GX Works-style instruction boxes use one cell for the opcode and one per
 # operand. Current authoring instructions have one operand, so they span two.
 INSTRUCTION_HALF = CELL_W - 5
@@ -140,8 +142,8 @@ def build_bundle(circuit: Circuit) -> dict:
         builder.connect(exit_node, coil)
         builder.connect(coil, right)
         # Extend to the LAST BRANCH CENTER, not the top edge of its grid row.
-        rail_top = offset + HEADER_H + CELL_H * 0.5 - 22
-        rail_bottom = offset + HEADER_H + CELL_H * (height - 0.5) + 22
+        rail_top = offset + HEADER_H
+        rail_bottom = offset + HEADER_H + CELL_H * height
         rungs.append({
             "id": rung.id, "title": rung.title,
             "nodes": list(builder.nodes.values()),
@@ -154,6 +156,11 @@ def build_bundle(circuit: Circuit) -> dict:
                 "nodes": builder.positions, "connections": builder.paths,
                 "rails": [{"node": node, "x": builder.positions[node]["x"], "y1": rail_top, "y2": rail_bottom}
                           for node in (left, right)],
+                "grid": {
+                    "x": RAIL_PAD, "y": offset + HEADER_H,
+                    "width": columns * CELL_W, "height": height * CELL_H,
+                    "columns": columns, "rows": height,
+                },
                 "title_y": offset + 26,
             },
         })

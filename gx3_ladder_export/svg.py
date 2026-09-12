@@ -2,7 +2,19 @@
 from __future__ import annotations
 
 import html
-from .layout import CELL_W, CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+from .layout import CELL_H, CELL_W, CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+
+
+# GX Works3 ladder-canvas reference profile. Stroke widths are CSS pixels and
+# vector-effect keeps them stable if callers scale the SVG.
+INK = "#202020"
+GRID = "#c6c6c7"
+COMMENT = "#2f8a48"
+STATEMENT_FILL = "#a2dfdf"
+STATEMENT_BORDER = "#4c925e"
+WIRE_PX = 1
+GRID_PX = 0.6
+BOX_PX = 1
 
 def esc(value: object) -> str:
     return html.escape(str(value), quote=True)
@@ -26,22 +38,35 @@ def render_svg(bundle: dict) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{bundle["width"]}" height="{bundle["height"]}" viewBox="0 0 {bundle["width"]} {bundle["height"]}" role="img">',
         f'<title>{esc(bundle["title"] or "Ladder circuit")}</title>',
         '<defs><linearGradient id="gx3-opcode" x1="0" y1="0" x2="0" y2="1">'
-        '<stop offset="0%" stop-color="#f8f9fb"/><stop offset="50%" stop-color="#cfd4dc"/>'
-        '<stop offset="100%" stop-color="#9da6b2"/></linearGradient></defs>',
-        '<style>.wire,.rail,.symbol,.mark{fill:none;stroke:#202832;stroke-width:2.4}'
-        '.label,.heading,.comment{font-family:Meiryo,Arial,sans-serif;fill:#16242f}'
-        '.label{font-size:14px;text-anchor:middle}.heading{font-size:14px}'
-        '.comment{font-size:12px;text-anchor:middle;fill:#14734a}'
-        '.opcode{font-family:Consolas,monospace;font-size:14px;font-weight:bold;fill:#16242f;text-anchor:middle}'
-        '.instruction-body{fill:white}.instruction-box{fill:none;stroke:#202832;stroke-width:1.8}'
-        '.opcode-cell{fill:url(#gx3-opcode)}.box-separator{stroke:#9aa4b1;stroke-width:1}'
-        '.operand{font-family:Consolas,Meiryo,monospace;font-size:13px;fill:#111827;text-anchor:middle}</style>',
+        '<stop offset="0%" stop-color="#f4f3f3"/><stop offset="50%" stop-color="#d3d3d3"/>'
+        '<stop offset="100%" stop-color="#969796"/></linearGradient></defs>',
+        f'<style>.wire,.rail,.symbol,.mark{{fill:none;stroke:{INK};stroke-width:{WIRE_PX};'
+        'stroke-linecap:square;stroke-linejoin:miter;vector-effect:non-scaling-stroke;shape-rendering:crispEdges}'
+        f'.grid{{stroke:{GRID};stroke-width:{GRID_PX};stroke-dasharray:1 2;vector-effect:non-scaling-stroke}}'
+        f'.statement{{fill:{STATEMENT_FILL};stroke:{STATEMENT_BORDER};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
+        '.label,.heading,.comment{font-family:"MS Gothic","Yu Gothic UI",Meiryo,Arial,sans-serif}'
+        f'.label{{font-size:13px;text-anchor:middle;fill:{INK}}}.heading{{font-size:12px;fill:{INK}}}'
+        f'.comment{{font-size:10px;text-anchor:middle;fill:{COMMENT}}}'
+        f'.opcode{{font-family:"MS Gothic",Consolas,monospace;font-size:13px;fill:{INK};text-anchor:middle}}'
+        f'.instruction-body{{fill:white}}.instruction-box{{fill:none;stroke:{INK};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke;shape-rendering:crispEdges}}'
+        f'.opcode-cell{{fill:url(#gx3-opcode)}}.box-separator{{stroke:{GRID};stroke-width:{BOX_PX};vector-effect:non-scaling-stroke}}'
+        f'.operand{{font-family:"MS Gothic",Consolas,Meiryo,monospace;font-size:12px;fill:{INK};text-anchor:middle}}</style>',
         f'<rect width="{bundle["width"]}" height="{bundle["height"]}" fill="white"/>',
     ]
     for rung in bundle["rungs"]:
         layout = rung["layout"]
-        lines.append(f'<g id="{esc(rung["id"])}">')
-        lines.append(f'<text class="heading" x="14" y="{layout["title_y"]}">{esc(short(rung["title"] or rung["id"], max(1, (bundle["width"] - 28) // 14)))}</text>')
+        # Integer geometry plus a half-pixel translation puts 1 px strokes on
+        # device-pixel centers instead of blending them over two pixel rows.
+        lines.append(f'<g id="{esc(rung["id"])}" transform="translate(0.5 0.5)">')
+        grid = layout["grid"]
+        lines.append(f'<rect class="statement" x="{grid["x"]}" y="{grid["y"] - 30}" width="{grid["width"]}" height="22"/>')
+        lines.append(f'<text class="heading" x="{grid["x"] + 4}" y="{layout["title_y"]}">{esc(short(rung["title"] or rung["id"], max(1, (bundle["width"] - 28) // 14)))}</text>')
+        for column in range(grid["columns"] + 1):
+            grid_x = grid["x"] + column * CELL_W
+            lines.append(f'<line class="grid" x1="{grid_x}" x2="{grid_x}" y1="{grid["y"]}" y2="{grid["y"] + grid["height"]}"/>')
+        for row in range(grid["rows"] + 1):
+            grid_y = grid["y"] + row * CELL_H
+            lines.append(f'<line class="grid" x1="{grid["x"]}" x2="{grid["x"] + grid["width"]}" y1="{grid_y}" y2="{grid_y}"/>')
         for rail in layout["rails"]:
             lines.append(f'<line class="rail" data-node="{esc(rail["node"])}" x1="{rail["x"]}" x2="{rail["x"]}" y1="{rail["y1"]}" y2="{rail["y2"]}"/>')
         for edge in layout["connections"]:
@@ -79,9 +104,9 @@ def render_svg(bundle: dict) -> str:
                 box_width = INSTRUCTION_HALF * 2
                 opcode_width = CELL_W - 10
                 operand_x = box_left + opcode_width + (box_width - opcode_width) / 2
-                lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="58" rx="2"/>')
+                lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="58"/>')
                 lines.append(f'<rect class="opcode-cell" x="{box_left}" y="{box_top}" width="{opcode_width}" height="58"/>')
-                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="58" rx="2"/>')
+                lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="58"/>')
                 lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + 58}"/>')
                 lines.append(f'<text class="opcode" x="{box_left + opcode_width / 2}" y="{y + 5}">{esc(node["opcode"])}</text>')
                 lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16}">{esc(" ".join(node["operands"]))}</text>')
