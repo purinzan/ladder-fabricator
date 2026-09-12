@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+outputs/
+*.gx3
+*.gtx
+*.db
+*.sqlite
+.DS_Store

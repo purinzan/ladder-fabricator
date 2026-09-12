@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "title": "基本回路の作成例",
+  "comments": {"X0": "開始条件", "X1": "条件1", "X2": "条件2", "X3": "停止要求", "Y0": "出力"},
+  "rungs": [
+    {
+      "id": "shared_branch",
+      "title": "共有接点を保持した並列回路",
+      "logic": {"and": ["X0", {"or": ["X1", "X2"]}, {"not": "X3"}]},
+      "output": {"type": "coil", "device": "Y0"}
+    }
+  ]
+}
