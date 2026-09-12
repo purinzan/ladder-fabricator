@@ -115,7 +115,7 @@ class CircuitTests(unittest.TestCase):
             for end, name in [(0, "from"), (-1, "to")]:
                 node = nodes[edge[name]["node"]]
                 pos = positions[node["id"]]
-                half = {"contact": 17, "coil": 22, "instruction": 48,
+                half = {"contact": 17, "coil": 22, "instruction": 115,
                         "inverter": 24}.get(node["kind"], 0)
                 self.assertEqual(path["points"][end], [pos["x"] + (half if end == 0 else -half), pos["y"]])
             for a, b in zip(path["points"], path["points"][1:]):
@@ -163,6 +163,8 @@ class CircuitTests(unittest.TestCase):
         self.assertEqual(bundle["rungs"][3]["output_condition"]["logic"]["op"], "inv")
         self.assertTrue(any(node["kind"] == "instruction" and node["opcode"] == "SET"
                             for node in bundle["rungs"][0]["nodes"]))
+        self.assertEqual(next(node for node in bundle["rungs"][1]["nodes"]
+                              if node["kind"] == "instruction")["operands"], ["C0"])
         self.assertTrue(any(node["kind"] == "inverter"
                             for node in bundle["rungs"][3]["nodes"]))
 
@@ -179,11 +181,15 @@ class CircuitTests(unittest.TestCase):
 
         svg = render_svg(bundle)
         ET.fromstring(svg)
-        self.assertIn(">SET Y0</text>", svg)
-        self.assertIn(">RST C0</text>", svg)
-        self.assertIn(">PLS M1</text>", svg)
+        self.assertIn(">SET</text>", svg)
+        self.assertIn(">RST</text>", svg)
+        self.assertIn(">PLS</text>", svg)
+        self.assertIn(">Y0</text>", svg)
+        self.assertIn(">C0</text>", svg)
+        self.assertIn(">M1</text>", svg)
         self.assertIn(">INV</text>", svg)
-        self.assertNotIn(">SET</text>", svg)
+        self.assertIn('class="opcode-cell"', svg)
+        self.assertIn('class="box-separator"', svg)
         for rung in bundle["rungs"]:
             self.check_geometry(rung)
 

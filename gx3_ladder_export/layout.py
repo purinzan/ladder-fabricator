@@ -15,7 +15,9 @@ HEADER_H = 58
 FOOTER_H = 32
 CONTACT_HALF = 17
 COIL_HALF = 22
-INSTRUCTION_HALF = 48
+# GX Works-style instruction boxes use one cell for the opcode and one per
+# operand. Current authoring instructions have one operand, so they span two.
+INSTRUCTION_HALF = CELL_W - 5
 INVERTER_HALF = 24
 
 
@@ -40,7 +42,7 @@ class Builder:
         self.connections: list[dict] = []
         self.paths: list[dict] = []
 
-    def add(self, identifier: str, kind: str, x: float, y: float, **details: str) -> str:
+    def add(self, identifier: str, kind: str, x: float, y: float, **details: object) -> str:
         if identifier in self.nodes:
             raise ValueError(f"duplicate generated node {identifier}")
         self.nodes[identifier] = {"id": identifier, "kind": kind, **details}
@@ -117,7 +119,8 @@ class Builder:
 def build_bundle(circuit: Circuit) -> dict:
     """Derived graph + SVG geometry + conditions; never a second editable truth."""
     rung_widths = [extent(rung.logic)[0] for rung in circuit.rungs]
-    columns = max(rung_widths) + 3
+    has_instruction = any(rung.output_type != "coil" for rung in circuit.rungs)
+    columns = max(rung_widths) + (4 if has_instruction else 3)
     offset = 0
     rungs = []
     comments = dict(circuit.comments)
@@ -128,8 +131,10 @@ def build_bundle(circuit: Circuit) -> dict:
         entry, exit_node = builder.place(rung.logic, 1, 0)
         opcode = {"coil": "OUT", "set": "SET", "rst": "RST", "pls": "PLS"}[rung.output_type]
         output_kind = "coil" if rung.output_type == "coil" else "instruction"
-        coil = builder.add(rung.id + ":output", output_kind, columns - 0.5, 0,
-                           device=rung.output, opcode=opcode, comment=comments.get(rung.output, ""))
+        output_x = columns - (1 if output_kind == "instruction" else 0.5)
+        coil = builder.add(rung.id + ":output", output_kind, output_x, 0,
+                           device=rung.output, opcode=opcode, operands=[rung.output],
+                           comment=comments.get(rung.output, ""))
         right = builder.add(rung.id + ":right", "right_rail", columns, 0)
         builder.connect(left, entry)
         builder.connect(exit_node, coil)
