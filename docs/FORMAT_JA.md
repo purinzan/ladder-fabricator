@@ -1,13 +1,12 @@
 # 回路JSON v1 / v2
 
-入力JSONは、回路の意味を保持する共通ASTの保存形式です。正規化AST、rung-text、
-描画・参照用JSON、SVGはすべてこのASTから導出します。SVGは描画用JSONの明示的な
-接続を描き、空白から配線を推測して付け加えません。
+CLIは入力JSONを検証して、メモリ上の共通ASTを作ります。rung-text、描画・参照用JSON、
+SVGはこのASTから導出します。SVGは描画用JSONの明示的な接続を描き、空白から配線を
+推測して付け加えません。保存用の正規化AST JSONは生成しません。
 
 ```text
-依頼文 → 共通AST → 正規化AST（再入力可能）
-                 ├→ rung-text --comments
-                 └→ メーカー別命令 → 接続・配置JSON → SVG
+依頼文 → メモリ上の共通AST → メーカー別命令 → 接続・配置 → SVG
+                         └→ rung-text --comments（任意）
 ```
 
 ## 入力
@@ -114,17 +113,12 @@ XMLに含められない制御文字は拒否します。
 条件の追加・並べ替え後にもIDが不変であることは保証しません。
 条件構造から接続グラフと描画座標を作り、両者を別々に手入力させません。
 
-## 正規化ASTとrung-text
-
-`--format ast`または`circuit_to_ast(circuit)`は、検証済みの`Circuit`を正規化された
-schema version 2の作成用JSONへ戻します。このJSONはそのまま`parse_circuit`へ再入力できます。
-デバイス名と接点表記は正規化されますが、出力動作は`rst`、`pls`、`plf`などの中立的な
-意味を保ち、RST/RESやPLS/DIFUへの変換はまだ行いません。
+## rung-text
 
 `ladder-fabricator rung-text circuit.json --comments`は同じASTから、回路ごとに
 `条件 -> 出力`を1行で出力します。コメント付きでは、その条件と出力が実際に参照する
 デバイスコメントだけを付加します。三菱電機・KEYENCEの命令名は選択したtargetから決まり、
-SVGとは別に論理を解析し直しません。
+SVGとは別に論理を解析し直しません。rung-textは確認用で、SVG生成経路には含まれません。
 
 ## 出力JSON
 

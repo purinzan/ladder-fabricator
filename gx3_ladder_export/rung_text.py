@@ -1,48 +1,10 @@
-"""Canonical circuit AST and its compact, comment-aware reading form."""
+"""Compact, comment-aware reading form derived directly from the circuit AST."""
 from __future__ import annotations
 
 import json
 
 from .model import Circuit, Expr
 from .target import profile_from_id
-
-
-def expression_to_ast(expr: Expr) -> dict:
-    """Serialize normalized logic without drawing coordinates or vendor opcodes."""
-    if expr.op == "contact":
-        return {"device": expr.device, "contact": expr.contact}
-    if expr.op == "inv":
-        return {"inv": expression_to_ast(expr.args[0])}
-    return {expr.op: [expression_to_ast(child) for child in expr.args]}
-
-
-def circuit_to_ast(circuit: Circuit) -> dict:
-    """Return the canonical, round-trippable authoring AST.
-
-    Version 2 is always emitted so the selected PLC family is explicit. Output
-    actions remain semantic (``rst``), and are lowered to RST or RES only by a
-    target-specific renderer.
-    """
-    profile = profile_from_id(circuit.target)
-    payload: dict = {
-        "schema_version": 2,
-        "target": {"vendor": profile.vendor, "series": profile.series},
-    }
-    if circuit.title:
-        payload["title"] = circuit.title
-    if circuit.comments:
-        payload["comments"] = dict(circuit.comments)
-    payload["rungs"] = []
-    for rung in circuit.rungs:
-        record = {
-            "id": rung.id,
-            "logic": expression_to_ast(rung.logic),
-            "output": {"type": rung.output_type, "device": rung.output},
-        }
-        if rung.title:
-            record["title"] = rung.title
-        payload["rungs"].append(record)
-    return payload
 
 
 def _condition_text(expr: Expr, parent_precedence: int = 0) -> str:
@@ -73,7 +35,7 @@ def _referenced_devices(expr: Expr) -> list[str]:
 
 
 def rung_text_records(circuit: Circuit, *, comments: bool = False) -> list[dict]:
-    """Build one readable record per output directly from the canonical AST."""
+    """Build one readable record per output directly from the in-memory AST."""
     profile = profile_from_id(circuit.target)
     comment_map = dict(circuit.comments)
     records = []
@@ -98,7 +60,7 @@ def rung_text_records(circuit: Circuit, *, comments: bool = False) -> list[dict]
 
 
 def render_rung_text(circuit: Circuit, *, comments: bool = False) -> str:
-    """Render the compact condition-to-output view used for review by people and AI."""
+    """Render the optional condition-to-output view for people and AI."""
     lines: list[str] = []
     for record in rung_text_records(circuit, comments=comments):
         if record["title"]:

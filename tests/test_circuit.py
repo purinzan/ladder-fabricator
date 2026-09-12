@@ -10,8 +10,8 @@ import unittest
 from xml.etree import ElementTree as ET
 
 from gx3_ladder_export import (
-    ValidationError, build_bundle, circuit_to_ast, parse_circuit,
-    render_rung_text, render_svg, rung_text_records,
+    ValidationError, build_bundle, parse_circuit, render_rung_text,
+    render_circuit, render_svg, rung_text_records,
 )
 from gx3_ladder_export.layout import CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
 from gx3_ladder_export.svg import BOX_PX, GRID, GRID_PX, INK, WIRE_PX
@@ -82,32 +82,13 @@ def graph_value(rung, state, previous=None):
 
 
 class CircuitTests(unittest.TestCase):
-    def test_canonical_ast_is_normalized_vendor_neutral_and_round_trippable(self):
-        source = {
-            "schema_version": 2,
-            "target": {"vendor": "keyence", "series": "kv-x"},
-            "title": "保持回路",
-            "comments": {"r0": "起動", "mr1": "運転保持"},
-            "rungs": [{
-                "id": "hold",
-                "title": "運転保持",
-                "logic": {"not": {"or": ["R0", {"device": "MR1", "contact": "b"}]}},
-                "output": {"type": "rst", "device": "MR1"},
-            }],
-        }
-        circuit = parse_circuit(source)
-        ast = circuit_to_ast(circuit)
-        self.assertEqual(ast["schema_version"], 2)
-        self.assertEqual(ast["target"], {"vendor": "keyence", "series": "kv-x"})
-        self.assertEqual(ast["rungs"][0]["output"], {"type": "rst", "device": "MR001"})
-        self.assertNotIn("RES", json.dumps(ast))
-        self.assertEqual(ast["rungs"][0]["logic"], {
-            "and": [
-                {"device": "R000", "contact": "b"},
-                {"device": "MR001", "contact": "a"},
-            ]
-        })
-        self.assertEqual(parse_circuit(ast), circuit)
+    def test_equivalent_not_spellings_produce_the_same_in_memory_ast(self):
+        with_not = parse_circuit(document({"not": {"or": ["X0", {"not": "X1"}]}}))
+        normalized = parse_circuit(document({"and": [
+            {"device": "X0", "contact": "b"},
+            {"device": "X1", "contact": "a"},
+        ]}))
+        self.assertEqual(with_not, normalized)
 
     def test_rung_text_and_comments_are_derived_from_the_same_ast(self):
         source = {
@@ -135,6 +116,11 @@ class CircuitTests(unittest.TestCase):
         self.assertIn("hold  RISING(R000) AND /R001 -> RES MR001", text_output)
         self.assertIn('R000="起動"', text_output)
         self.assertNotIn("未使用", text_output)
+
+    def test_in_memory_ast_renders_directly_to_svg(self):
+        circuit = parse_circuit(document({"and": ["X0", {"not": "X1"}]}))
+        self.assertEqual(render_circuit(circuit), render_svg(build_bundle(circuit)))
+        ET.fromstring(render_circuit(circuit))
 
     def test_shared_contacts_are_not_duplicated(self):
         logic = {"and": ["X0", {"or": ["X1", "X2"]}]}
@@ -417,7 +403,7 @@ class CircuitTests(unittest.TestCase):
             source = root / "回路.json"
             source.write_text(json.dumps(document({"and": ["X0", {"not": "X1"}]})), encoding="utf-8")
             command = [sys.executable, "-m", "gx3_ladder_export", str(source)]
-            for fmt in ["svg", "json", "ast", "rung-text"]:
+            for fmt in ["svg", "json", "rung-text"]:
                 dest = root / "出力" / f"result.{fmt}"
                 options = [*command, "--format", fmt, "-o", str(dest)]
                 if fmt == "rung-text":
@@ -429,10 +415,6 @@ class CircuitTests(unittest.TestCase):
                     ET.parse(dest)
                 elif fmt == "json":
                     self.assertEqual(json.loads(dest.read_text(encoding="utf-8"))["schema_version"], 1)
-                elif fmt == "ast":
-                    ast = json.loads(dest.read_text(encoding="utf-8"))
-                    self.assertEqual(ast["schema_version"], 2)
-                    self.assertEqual(parse_circuit(ast), parse_circuit(document({"and": ["X0", {"not": "X1"}]})))
                 else:
                     self.assertIn("r1  X0 AND /X1 -> Y0", dest.read_text(encoding="utf-8"))
             result = subprocess.run(

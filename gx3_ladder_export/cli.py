@@ -6,8 +6,7 @@ from pathlib import Path
 import sys
 
 from . import (
-    ValidationError, build_bundle, circuit_to_ast, parse_circuit,
-    render_rung_text, render_svg,
+    ValidationError, build_bundle, parse_circuit, render_circuit, render_rung_text,
 )
 
 MAX_INPUT_BYTES = 1_048_576
@@ -30,8 +29,8 @@ def main(argv: list[str] | None = None) -> int:
         argv = [*argv[1:], "--format", "rung-text"]
     parser = argparse.ArgumentParser(description="Validated ladder AST to rung text, SVG, or structured connections.")
     parser.add_argument("input", type=Path, help="version 1 or 2 circuit JSON")
-    parser.add_argument("--format", choices=("svg", "json", "ast", "rung-text"), default="svg",
-                        help="json is the derived render bundle; ast is normalized and reusable")
+    parser.add_argument("--format", choices=("svg", "json", "rung-text"), default="svg",
+                        help="json is the optional derived render bundle")
     parser.add_argument("--comments", action="store_true",
                         help="append referenced device comments to rung-text output")
     parser.add_argument("--target", choices=("melsec-iq-f", "keyence-kv-x"),
@@ -59,13 +58,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.validate_only:
             print(f"valid: {len(circuit.rungs)} rung(s); structural relay checks only")
             return 0
-        if args.format == "ast":
-            content = json.dumps(circuit_to_ast(circuit), ensure_ascii=False, indent=2)
-        elif args.format == "rung-text":
+        if args.format == "rung-text":
             content = render_rung_text(circuit, comments=args.comments)
         else:
-            bundle = build_bundle(circuit)
-            content = json.dumps(bundle, ensure_ascii=False, indent=2) if args.format == "json" else render_svg(bundle)
+            content = (
+                json.dumps(build_bundle(circuit), ensure_ascii=False, indent=2)
+                if args.format == "json" else render_circuit(circuit)
+            )
         if args.output:
             args.output.parent.mkdir(parents=True, exist_ok=True)
             args.output.write_text(content + "\n", encoding="utf-8")
