@@ -98,8 +98,8 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 
 出力の`type`は通常コイルの`coil`、保持ONの`set`、デバイスをリセットする`rst`、
 条件の立ち上がりで1スキャン出力する`pls`を指定できます。SVGではGX Works3のMOVなどと同じ規則で、
-命令枠を命令セルとオペランドセルに分けます。`SET | Y0`、`RST | C0`、`PLS | M1`のように、
-対象デバイスとそのコメントを命令枠内へ表示します。
+白い命令枠を命令セルとオペランドセルに分けます。`SET | Y0`、`RST | C0`、`PLS | M1`のように
+対象デバイスを枠内へ、デバイスコメントを対応するセルの下へ表示します。
 INVはPLCの演算順序を明確にするため、`logic`の最外側だけで使用します。
 
 [命令サンプル](examples/instructions.json)には、立ち上がり接点→SET、RST、PLS、AND結果→INV→OUTを収録しています。
