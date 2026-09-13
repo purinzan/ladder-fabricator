@@ -55,6 +55,13 @@ class DocumentationContractTests(unittest.TestCase):
         schema = json.loads((ROOT / "schema" / "ladder-ast.schema.json").read_text(encoding="utf-8"))
         self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
 
+    def test_json_schema_matches_cli_version_and_contact_defaults(self):
+        schema = json.loads((ROOT / "schema" / "ladder-ast.schema.json").read_text(encoding="utf-8"))
+        version_rule = schema["allOf"][0]
+        self.assertEqual(version_rule["then"], {"required": ["target"]})
+        self.assertEqual(version_rule["else"], {"not": {"required": ["target"]}})
+        self.assertEqual(schema["$defs"]["contact"]["required"], ["device"])
+
     def test_public_site_does_not_reference_missing_local_files(self):
         required = (
             "docs/assets/basic.svg",
