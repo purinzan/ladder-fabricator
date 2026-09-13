@@ -19,13 +19,13 @@ BOX_PX = 1
 GX_THEME = {
     "ink": INK, "grid": GRID, "comment": COMMENT,
     "statement_fill": STATEMENT_FILL, "statement_border": STATEMENT_BORDER,
-    "font": '"Noto Sans CJK JP","MS Gothic","Yu Gothic UI",Meiryo,Arial,sans-serif',
+    "font": '"Noto Sans CJK JP","Hiragino Sans","MS Gothic","Yu Gothic UI",Meiryo,Arial,sans-serif',
     "opcode_fill": "url(#gx3-opcode)",
 }
 KEYENCE_THEME = {
     "ink": "#1e2732", "grid": "#cbd2da", "comment": "#26754d",
     "statement_fill": "#e7edf3", "statement_border": "#8998a8",
-    "font": '"Noto Sans CJK JP","Yu Gothic UI",Meiryo,"MS Gothic",Arial,sans-serif',
+    "font": '"Noto Sans CJK JP","Hiragino Sans","Yu Gothic UI",Meiryo,"MS Gothic",Arial,sans-serif',
     "opcode_fill": "#e4e8ed",
 }
 

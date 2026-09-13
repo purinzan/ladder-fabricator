@@ -4,12 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gx3-ladder-export"
-version = "0.4.0"
-description = "Generate validated ladder SVG and explicit connection data from circuit JSON"
+version = "0.5.0"
+description = "Generate validated ladder SVG, PNG, and explicit connection data from circuit JSON"
 requires-python = ">=3.10"
 readme = "README.md"
 license = {file = "LICENSE.txt"}
 dependencies = []
+
+[project.optional-dependencies]
+png = ["CairoSVG>=2.7,<3"]
 
 [project.scripts]
 gx3-ladder-export = "gx3_ladder_export.cli:main"

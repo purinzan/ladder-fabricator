@@ -5,5 +5,4 @@ alwaysApply: true
 
 Read `AGENTS.md` and `README.md` in full before any ladder-circuit task. Follow
 README’s AST and instruction tables exactly and use its validate → rung-text →
-SVG workflow. Do not invent or approximate unsupported instructions.
-
+SVG/PNG workflow. Do not invent or approximate unsupported instructions.

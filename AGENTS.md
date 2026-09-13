@@ -11,10 +11,9 @@ Before generating, editing, reviewing, or rendering a ladder circuit, read
 - Use only documented AST forms, output types, targets, and devices. Never
   approximate an unsupported instruction with `coil` or another opcode.
 - Run `ladder-fabricator INPUT --validate-only`, then
-  `ladder-fabricator rung-text INPUT --comments`, before rendering SVG.
+  `ladder-fabricator rung-text INPUT --comments`, before rendering SVG or PNG.
 - Distinguish structural validation from PLC behavior and machine-safety
   validation in every result.
 - When changing the parser, schema vocabulary, supported devices, CLI, or
   output semantics, update `README.md`, `docs/FORMAT_JA.md`, examples, and tests
   in the same change.
-

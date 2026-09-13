@@ -2,6 +2,7 @@
 from .model import Circuit, ValidationError, parse_circuit
 from .rung_text import render_rung_text, rung_text_records
 from .layout import build_bundle
+from .png import render_png
 from .svg import render_svg
 
 
@@ -13,4 +14,5 @@ def render_circuit(circuit: Circuit) -> str:
 __all__ = [
     "Circuit", "ValidationError", "parse_circuit", "render_rung_text",
     "rung_text_records", "build_bundle", "render_svg", "render_circuit",
+    "render_png",
 ]

@@ -1,7 +1,7 @@
 # Ladder Fabricator
 
 回路の条件をJSONで記述し、MELSEC iQ-FまたはKEYENCE KV-X表記の、デバイスコメント付き
-ラダーSVGと論理・接続構造JSONを生成するPythonツールです。
+ラダーSVG、共有しやすい高解像度PNG、論理・接続構造JSONを生成するPythonツールです。
 
 Pythonパッケージ名は`gx3-ladder-export`です。CLIは`ladder-fabricator`を使用でき、
 従来名の`gx3-ladder-export`も同じ機能の別名として残しています。
@@ -33,10 +33,10 @@ Pythonパッケージ名は`gx3-ladder-export`です。CLIは`ladder-fabricator`
 
 重要な境界:
 
-- AIは依頼内容を下記ASTへ変換する。座標、配線、SVG要素は作成しない
+- AIは依頼内容を下記ASTへ変換する。座標、配線、SVG／PNG要素は作成しない
 - 再生成可能な入力は作成用JSONであり、`--format json`の構造JSONは再入力しない
 - 表にない命令やデバイスを推測、別命令への置換、単純OUTへの縮退で表現しない
-- 必ず`--validate-only`の後に`rung-text --comments`で論理を確認してからSVGを生成する
+- 必ず`--validate-only`の後に`rung-text --comments`で論理を確認してからSVG／PNGを生成する
 - 構造検証の成功はPLCの実行、安全性、CPU固有のデバイス範囲を保証しない
 
 ## 対応PLCモード
@@ -51,7 +51,8 @@ SVGの表現を切り替えます。従来の`schema_version: 1`は三菱電機�
 `schema_version: 2`では`target`に三菱電機またはKEYENCEを明示できます。
 
 GX Works3やGX3ファイルを使わず、依頼内容から作った共通ASTから直接ラダー図を生成できます。
-座標や配線を手書きする必要はありません。Python 3.10以上で動作し、実行時の追加依存もありません。
+座標や配線を手書きする必要はありません。Python 3.10以上で動作します。SVG、構造JSON、
+rung-textには追加依存がなく、PNGだけは任意依存のCairoSVGを使います。
 
 ## できること
 
@@ -60,6 +61,7 @@ GX Works3やGX3ファイルを使わず、依頼内容から作った共通AST�
 - 条件構造から接点、分岐、合流、円形コイル、命令枠、母線を自動配置する
 - `X0 AND (X1 OR X2)` のような共有接点を複製せずに描く
 - デバイスコメントをSVGへ表示し、全文をSVGのtitleと構造JSONへ保持する
+- SVGと同じ内容を、iPhone等へ保存しやすい2倍解像度PNGとして直接出力する
 - GX Works3のラダー編集画面を基準に、1px配線、薄い点線グリッド、行コメント帯、命令セルの色と寸法を再現する
 - 同じ入力から、安定した要素IDと明示的な接続関係を生成する
 - 未対応の命令や壊れた入力を、曖昧な図にせずエラーとして返す
@@ -104,6 +106,16 @@ GX Works3やGX3ファイルを使わず、依頼内容から作った共通AST�
 python -m pip install .
 gx3-ladder-export examples/basic.json -o outputs/basic.svg
 ```
+
+PNG出力を使う場合だけ、任意依存を含めてインストールします。
+
+```powershell
+python -m pip install ".[png]"
+ladder-fabricator examples/basic.json -o outputs/basic.png
+```
+
+出力先が`.png`なら形式を自動判定し、標準で縦横2倍のPNGを生成します。明示する場合は
+`--format png`、倍率を変える場合は`--png-scale 0.25`～`4`を使用します。
 
 接続・条件構造も必要な場合はJSONで出力できます。
 
@@ -152,6 +164,7 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 | `ladder-fabricator INPUT` | SVGを標準出力 |
 | `-o PATH`／`--output PATH` | 結果をUTF-8ファイルへ保存し、親フォルダを作成 |
 | `--format svg` | SVGを生成。既定値 |
+| `--format png` | CairoSVGでPNGを生成。出力先が`.png`の場合は自動選択 |
 | `--format json` | 描画・参照用の構造JSONを生成 |
 | `rung-text INPUT` | `--format rung-text`の短縮形 |
 | `--format rung-text` | 条件から出力への確認用テキストを生成 |
@@ -159,6 +172,7 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 | `--target melsec-iq-f` | 入力内のtargetを一時的にMELSEC iQ-Fへ上書き |
 | `--target keyence-kv-x` | 入力内のtargetを一時的にKEYENCE KV-Xへ上書き |
 | `--validate-only` | 作成用JSONの構造検証だけを実行 |
+| `--png-scale N` | PNGの倍率を0.25～4で指定。既定値2 |
 
 ## AIとこのツールの役割
 
@@ -171,6 +185,7 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 
 ```text
 依頼文 → メモリ上の共通AST → 接続・配置 → SVG
+                         │            └→ PNG（任意）
                          └→ rung-text --comments（任意の確認表示）
 ```
 
@@ -301,7 +316,7 @@ AIは次の順序を固定して使用します。
 2. このREADMEの表にある作成用JSONだけでASTを作る。座標や配線は記述しない
 3. `ladder-fabricator circuit.json --validate-only`を実行する
 4. `ladder-fabricator rung-text circuit.json --comments`を実行し、依頼と条件式を照合する
-5. `ladder-fabricator circuit.json -o output.svg`でSVGを生成する
+5. `ladder-fabricator circuit.json -o output.svg`でSVG、または`-o output.png`でPNGを生成する
 6. 必要な場合だけ`--format json`で導出済み構造JSONを生成する
 7. 結果には「形式検証済み」と「PLC動作・実機安全性は未保証」を区別して記載する
 
@@ -309,7 +324,6 @@ AIは次の順序を固定して使用します。
 
 [命令サンプル](examples/instructions.json)には、立ち上がり接点、SET、RST、PLS、INVを収録しています。
 [KEYENCE例](examples/keyence-kv-x.json)にはKV-XのデバイスとRESへの変換を収録しています。
-[ロードセルPID押圧制御](examples/servo_force_pid.py)は、メモリ上のASTからPID・MOVを含むSVGを生成します。
 
 ## 生成物
 
@@ -322,6 +336,12 @@ AIは次の順序を固定して使用します。
 
 接点、分岐、合流、INV、母線、出力コイル、SET/RST/PLS命令を描画します。各要素には構造JSONと対応する
 `data-node`または`data-connection`属性が付きます。ブラウザー、文書、Web画面へそのまま表示できます。
+
+### PNG
+
+SVGと同じ検証済みAST・接続・配置からCairoSVGでラスター化します。出力先の拡張子が`.png`なら
+`--format`を省略できます。既定倍率は2で、`--png-scale`は0.25～4、最大80メガピクセルです。
+日本語表示にはNoto Sans CJK JP、Hiragino Sans、Yu Gothic、Meiryo等の日本語フォントを使用します。
 
 ### 構造JSON
 
@@ -372,7 +392,7 @@ Path("basic.svg").write_text(render_circuit(circuit), encoding="utf-8")
 | KEYENCE RESの対象 | R、B、MR、LR、T、C、DM、EM、FM、ZF、W、TM |
 | KEYENCE 比較/PID/MOVの対象 | DM、EM、FM、ZF、W、TM |
 | 文書 | 複数回路、回路名、デバイスコメント |
-| 出力 | SVG、論理・接続構造JSON |
+| 出力 | SVG、PNG、rung-text、論理・接続構造JSON |
 
 タイマーの計時命令、カウンタの加算命令、定数比較、MOV以外の算術・データ命令、ラベル、
 GX3/KV STUDIOプロジェクトの取込みは未対応です。ワードデバイス同士の比較、PID、MOVには対応しています。
@@ -388,6 +408,7 @@ CPUごとのデバイス範囲、配線、センサー極性、安全条件は�
 ```powershell
 python run_tests.py
 python -m pip install build
+python -m pip install ".[png]"
 python -m build --wheel
 ```
 

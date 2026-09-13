@@ -34,7 +34,8 @@ class DocumentationContractTests(unittest.TestCase):
             '"compare"', '"type":"coil"', '"type":"set"',
             '"type":"rst"', '"type":"pls"', '"type":"plf"',
             '"type": "pid"', '"type":"mov"', "melsec-iq-f",
-            "keyence-kv-x", "--validate-only", "rung-text",
+            "keyence-kv-x", "--validate-only", "rung-text", "--format png",
+            "--png-scale", '".[png]"',
         )
         for text in required:
             with self.subTest(authoring_form=text):
@@ -43,4 +44,3 @@ class DocumentationContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

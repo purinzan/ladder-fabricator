@@ -1,11 +1,12 @@
 # 回路JSON v1 / v2
 
 CLIは入力JSONを検証して、メモリ上の共通ASTを作ります。rung-text、描画・参照用JSON、
-SVGはこのASTから導出します。SVGは描画用JSONの明示的な接続を描き、空白から配線を
+SVGとPNGはこのASTから導出します。SVGは描画用JSONの明示的な接続を描き、空白から配線を
 推測して付け加えません。保存用の正規化AST JSONは生成しません。
 
 ```text
 依頼文 → メモリ上の共通AST → メーカー別命令 → 接続・配置 → SVG
+                         │                              └→ PNG（任意）
                          └→ rung-text --comments（任意）
 ```
 
@@ -161,6 +162,13 @@ SVGとは別に論理を解析し直しません。rung-textは確認用で、SV
 これは導出結果で、現時点ではCLIへの再入力形式ではありません。
 再生成には作成用JSONを使ってください。
 `render_svg(bundle)` は `build_bundle` の出力専用で、任意に編集された描画JSONを検証しません。
+
+## PNG出力
+
+`-o output.png`は出力先拡張子からPNGを自動選択します。`--format png`でも明示できます。
+PNGは`render_svg(build_bundle(circuit))`の結果を任意依存のCairoSVGでラスター化するため、
+SVGと別の回路解釈や配置処理を持ちません。既定倍率は2、`--png-scale`は0.25～4、
+生成上限は80メガピクセルです。利用前に`python -m pip install ".[png]"`を実行します。
 
 SVGの各接続に `data-connection`、接点・出力に `data-node` を付け、
 JSONとの対応を保持します。長いコメントは図上で省略記号付きで短縮し、
