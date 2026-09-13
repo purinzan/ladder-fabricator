@@ -26,7 +26,8 @@
   "allOf": [
     {
       "if": {"properties": {"schema_version": {"const": 2}}, "required": ["schema_version"]},
-      "then": {"required": ["target"]}
+      "then": {"required": ["target"]},
+      "else": {"not": {"required": ["target"]}}
     }
   ],
   "$defs": {
@@ -50,7 +51,7 @@
     "contact": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["device", "contact"],
+      "required": ["device"],
       "properties": {
         "device": {"type": "string", "minLength": 2},
         "contact": {"enum": ["a", "b", "rising", "falling"]}

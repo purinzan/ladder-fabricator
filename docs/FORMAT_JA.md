@@ -15,7 +15,7 @@ SVGとPNGはこのASTから導出します。SVGは描画用JSONの明示的な�
 | 項目 | 必須 | 内容 |
 |---|---|---|
 | schema_version | はい | `1`（MELSEC固定）または`2`（メーカー指定） |
-| target | v2では必須 | `vendor`と`series`。現在はMELSEC iQ-FとKEYENCE KV-X |
+| target | v2では必須 | `vendor`と`series`。v1では記述不可。現在はMELSEC iQ-FとKEYENCE KV-X |
 | title | いいえ | 文書名、160文字以内。SVGのtitleに格納 |
 | comments | いいえ | デバイス名→コメント。各2048文字以内、最大512件 |
 | rungs | はい | 1〜64回路の配列 |
@@ -35,7 +35,8 @@ SVGとPNGはこのASTから導出します。SVGは描画用JSONの明示的な�
 {"device": "X0", "contact": "a"}
 ```
 
-`"X0"` は上記の省略形。`contact: "b"` はb接点。
+`"X0"` は上記の省略形。接点オブジェクトで`contact`を省略した場合もa接点。
+`contact: "b"` はb接点。
 `contact: "rising"` はOFFからONへ変わった1スキャンだけ成立する立ち上がり接点、
 `contact: "falling"` はONからOFFへ変わった1スキャンだけ成立する立ち下がり接点。
 `{"not": "X0"}` でもb接点を表します。
