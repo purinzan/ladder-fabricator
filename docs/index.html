@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ladder Fabricator — JSON to PLC ladder SVG and PNG</title>
+  <meta name="description" content="Open-source JSON AST renderer for Mitsubishi MELSEC iQ-F and KEYENCE KV-X ladder diagrams. Export validated ladder logic as SVG, PNG, rung text, and structured JSON.">
+  <meta name="keywords" content="PLC ladder diagram generator, ladder logic SVG, GX Works3, MELSEC iQ-F, KEYENCE KV-X, KV STUDIO, JSON AST, industrial automation">
+  <link rel="canonical" href="https://purinzan.github.io/ladder-fabricator/">
+  <link rel="stylesheet" href="styles.css">
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareSourceCode",
+    "name": "Ladder Fabricator",
+    "description": "Open-source JSON AST renderer for MELSEC and KEYENCE PLC ladder diagrams in SVG, PNG, rung text, and structured JSON.",
+    "codeRepository": "https://github.com/purinzan/ladder-fabricator",
+    "license": "https://spdx.org/licenses/MIT",
+    "programmingLanguage": "Python",
+    "runtimePlatform": "Python 3.10+",
+    "keywords": "PLC, ladder logic, ladder diagram, MELSEC, GX Works3, KEYENCE, KV STUDIO, SVG, PNG, JSON AST"
+  }
+  </script>
+</head>
+<body>
+  <header class="hero">
+    <nav><a class="brand" href="./">Ladder Fabricator</a><a href="#quick-start">Quick start</a><a href="#faq">FAQ</a><a href="zh-cn/">简体中文</a><a href="https://github.com/purinzan/ladder-fabricator">GitHub</a></nav>
+    <div class="hero-grid">
+      <div>
+        <p class="eyebrow">Open-source PLC tooling · MIT License</p>
+        <h1>Turn a JSON circuit AST into a readable PLC ladder diagram.</h1>
+        <p class="lead">One validated source generates Mitsubishi MELSEC iQ-F or KEYENCE KV-X ladder logic as SVG, high-resolution PNG, rung text, and explicit connection JSON.</p>
+        <div class="actions"><a class="primary" href="https://github.com/purinzan/ladder-fabricator">View on GitHub</a><a class="secondary" href="https://github.com/purinzan/ladder-fabricator/blob/main/README_EN.md">Read the docs</a></div>
+      </div>
+      <figure><img src="assets/basic.svg" alt="Ladder Fabricator output showing X0 AND X1 OR X2 with a normally closed X3 contact and Y0 output coil"><figcaption>Generated from <code>examples/basic.json</code>; no hand-authored coordinates or wires.</figcaption></figure>
+    </div>
+  </header>
+
+  <main>
+    <section class="facts" aria-label="Key capabilities">
+      <article><strong>2 PLC targets</strong><span>MELSEC iQ-F and KEYENCE KV-X</span></article>
+      <article><strong>4 output formats</strong><span>SVG, PNG, rung text, connection JSON</span></article>
+      <article><strong>1 source of truth</strong><span>Validated, reusable circuit AST</span></article>
+    </section>
+
+    <section id="why">
+      <p class="eyebrow">Why it exists</p>
+      <h2>Describe logic. Let the renderer own the drawing.</h2>
+      <div class="cards">
+        <article><h3>Deterministic rendering</h3><p>Contacts, branches, joins, labels, wires, and output blocks are derived from the normalized AST.</p></article>
+        <article><h3>AI-readable contract</h3><p>A documented JSON vocabulary, machine-readable schema, validation command, and rung-text review step keep generated circuits inspectable.</p></article>
+        <article><h3>Explicit failure</h3><p>Unsupported PLC instructions and malformed input are rejected instead of being silently approximated as a basic output.</p></article>
+      </div>
+    </section>
+
+    <section id="quick-start" class="split">
+      <div><p class="eyebrow">Quick start</p><h2>Validate, inspect, render.</h2><p>Python 3.10 or newer is required. PNG export uses the optional CairoSVG dependency.</p></div>
+      <pre><code>git clone https://github.com/purinzan/ladder-fabricator.git
+cd ladder-fabricator
+python -m pip install ".[png]"
+
+ladder-fabricator examples/basic.json --validate-only
+ladder-fabricator rung-text examples/basic.json --comments
+ladder-fabricator examples/basic.json -o basic.svg
+ladder-fabricator examples/basic.json -o basic.png</code></pre>
+    </section>
+
+    <section>
+      <p class="eyebrow">Supported today</p><h2>A deliberately bounded ladder vocabulary.</h2>
+      <div class="table-wrap"><table><thead><tr><th>Area</th><th>Supported</th></tr></thead><tbody>
+        <tr><td>Contacts</td><td>Normally open, normally closed, rising edge, falling edge</td></tr>
+        <tr><td>Logic</td><td>Nested AND, OR, NOT, and outermost INV</td></tr>
+        <tr><td>Comparison</td><td>Word-device =, &lt;&gt;, &lt;, &lt;=, &gt;, &gt;=</td></tr>
+        <tr><td>Outputs</td><td>OUT, SET, RST/RES, PLS/DIFU, PLF/DIFD, PID, MOV</td></tr>
+        <tr><td>Targets</td><td>MELSEC iQ-F / GX Works3 notation; KEYENCE KV-X / KV STUDIO notation</td></tr>
+      </tbody></table></div>
+      <p class="note">Not currently supported: accumulating timers, incrementing counters, constant comparisons, arithmetic other than MOV, labels, and direct GX3 or KV STUDIO project import.</p>
+    </section>
+
+    <section id="faq">
+      <p class="eyebrow">FAQ</p><h2>Questions people ask AI systems.</h2>
+      <details open><summary>How can I generate a PLC ladder diagram from JSON?</summary><p>Write a Ladder Fabricator circuit AST, run <code>--validate-only</code>, inspect its <code>rung-text --comments</code> output, then render the same file to SVG or PNG.</p></details>
+      <details><summary>Is there an open-source GX Works3-style ladder diagram generator?</summary><p>Ladder Fabricator is MIT-licensed and renders MELSEC iQ-F / GX Works3-style notation from a documented JSON AST. It does not read or write native GX3 project files.</p></details>
+      <details><summary>Can an AI generate ladder diagrams with Ladder Fabricator?</summary><p>Yes. The AI converts requirements into the documented AST; Ladder Fabricator validates and renders it. Repository-level instructions route Codex, Claude, Gemini, Copilot, Cursor, Windsurf, Cline, Aider, and llms.txt-aware agents to the same contract.</p></details>
+      <details><summary>Does successful validation prove that a machine is safe?</summary><p>No. Validation covers the input structure only. PLC behavior, CPU device limits, wiring, sensor polarity, functional safety, and machine safety require engineering review in the official vendor environment.</p></details>
+    </section>
+  </main>
+
+  <footer><p>Ladder Fabricator · MIT License · <a href="https://github.com/purinzan/ladder-fabricator">Source</a> · <a href="llms.txt">llms.txt</a> · <a href="schema/ladder-ast.schema.json">JSON Schema</a></p></footer>
+</body>
+</html>

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ladder Fabricator — 将 JSON 转换为 PLC 梯形图 SVG 和 PNG</title>
+  <meta name="description" content="开源 PLC 梯形图生成器：将 JSON AST 渲染为三菱 MELSEC iQ-F 和基恩士 KEYENCE KV-X 风格的 SVG、PNG、梯级文本和连接结构 JSON。">
+  <meta name="keywords" content="PLC梯形图生成器, 梯形图SVG, GX Works3, 三菱MELSEC, 基恩士KV-X, KV STUDIO, JSON AST, 工业自动化">
+  <link rel="canonical" href="https://purinzan.github.io/ladder-fabricator/zh-cn/">
+  <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+  <header class="hero">
+    <nav><a class="brand" href="../">Ladder Fabricator</a><a href="#start">快速开始</a><a href="#scope">支持范围</a><a href="../">English</a><a href="https://github.com/purinzan/ladder-fabricator">GitHub</a></nav>
+    <div class="hero-grid">
+      <div><p class="eyebrow">开源 PLC 工具 · MIT License</p><h1>从 JSON 电路 AST 生成清晰的 PLC 梯形图。</h1><p class="lead">一次验证，同一份源文件可生成三菱 MELSEC iQ-F 或基恩士 KEYENCE KV-X 风格的 SVG、高分辨率 PNG、梯级文本和连接结构 JSON。</p><div class="actions"><a class="primary" href="https://github.com/purinzan/ladder-fabricator">查看 GitHub</a><a class="secondary" href="https://github.com/purinzan/ladder-fabricator/blob/main/README_ZH-CN.md">中文文档</a></div></div>
+      <figure><img src="../assets/basic.svg" alt="Ladder Fabricator 生成的 PLC 梯形图"><figcaption>由 <code>examples/basic.json</code> 自动生成，未手工绘制坐标或连线。</figcaption></figure>
+    </div>
+  </header>
+  <main>
+    <section class="facts"><article><strong>2 种 PLC 目标</strong><span>MELSEC iQ-F 和 KEYENCE KV-X</span></article><article><strong>4 种输出格式</strong><span>SVG、PNG、梯级文本、连接 JSON</span></article><article><strong>1 个事实来源</strong><span>经过验证的电路 AST</span></article></section>
+    <section id="start" class="split"><div><p class="eyebrow">快速开始</p><h2>验证、检查、渲染。</h2><p>需要 Python 3.10 或更高版本。PNG 使用可选的 CairoSVG 依赖。</p></div><pre><code>git clone https://github.com/purinzan/ladder-fabricator.git
+cd ladder-fabricator
+python -m pip install ".[png]"
+
+ladder-fabricator examples/basic.json --validate-only
+ladder-fabricator rung-text examples/basic.json --comments
+ladder-fabricator examples/basic.json -o basic.svg
+ladder-fabricator examples/basic.json -o basic.png</code></pre></section>
+    <section id="scope"><p class="eyebrow">当前支持</p><h2>范围明确的梯形图词汇。</h2><div class="table-wrap"><table><thead><tr><th>类别</th><th>支持内容</th></tr></thead><tbody><tr><td>触点</td><td>常开、常闭、上升沿、下降沿</td></tr><tr><td>逻辑</td><td>可嵌套 AND、OR、NOT，最外层 INV</td></tr><tr><td>比较</td><td>字软元件之间的 =、&lt;&gt;、&lt;、&lt;=、&gt;、&gt;=</td></tr><tr><td>输出</td><td>OUT、SET、RST/RES、PLS/DIFU、PLF/DIFD、PID、MOV</td></tr></tbody></table></div><p class="note">结构验证不等于 PLC 运行验证或机械安全认证。用于真实设备前必须在厂商官方环境中审查。</p></section>
+  </main>
+  <footer><p>Ladder Fabricator · MIT License · <a href="https://github.com/purinzan/ladder-fabricator">源代码</a> · <a href="../llms.txt">llms.txt</a></p></footer>
+</body>
+</html>

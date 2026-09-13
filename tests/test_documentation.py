@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import unittest
 
 
@@ -40,6 +41,32 @@ class DocumentationContractTests(unittest.TestCase):
         for text in required:
             with self.subTest(authoring_form=text):
                 self.assertIn(text, readme)
+
+    def test_open_source_and_discovery_assets_are_consistent(self):
+        license_text = (ROOT / "LICENSE.txt").read_text(encoding="utf-8")
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        website = (ROOT / "docs" / "index.html").read_text(encoding="utf-8")
+        chinese = (ROOT / "README_ZH-CN.md").read_text(encoding="utf-8")
+        self.assertTrue(license_text.startswith("MIT License"))
+        self.assertIn('license = "MIT"', pyproject)
+        self.assertIn('"@type": "SoftwareSourceCode"', website)
+        self.assertIn("OAI-SearchBot", (ROOT / "docs" / "robots.txt").read_text(encoding="utf-8"))
+        self.assertIn("Ladder Fabricator", chinese)
+        schema = json.loads((ROOT / "schema" / "ladder-ast.schema.json").read_text(encoding="utf-8"))
+        self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+
+    def test_public_site_does_not_reference_missing_local_files(self):
+        required = (
+            "docs/assets/basic.svg",
+            "docs/assets/basic.png",
+            "docs/styles.css",
+            "docs/llms.txt",
+            "docs/sitemap.xml",
+            "docs/zh-cn/index.html",
+        )
+        for relative in required:
+            with self.subTest(path=relative):
+                self.assertTrue((ROOT / relative).is_file())
 
 
 if __name__ == "__main__":

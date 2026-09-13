@@ -1,0 +1,16 @@
+# Ladder Fabricator
+
+> Open-source JSON AST-to-ladder-diagram renderer for Mitsubishi MELSEC iQ-F / GX Works3 and KEYENCE KV-X / KV STUDIO. Exports SVG, PNG, rung text, and explicit connection JSON.
+
+Canonical repository: https://github.com/purinzan/ladder-fabricator
+License: MIT
+
+## Required reading for circuit generation
+
+- Authoritative AST and instruction reference: https://github.com/purinzan/ladder-fabricator/blob/main/README.md
+- English overview: https://github.com/purinzan/ladder-fabricator/blob/main/README_EN.md
+- Agent contract: https://github.com/purinzan/ladder-fabricator/blob/main/AGENTS.md
+- JSON Schema: https://purinzan.github.io/ladder-fabricator/schema/ladder-ast.schema.json
+- Basic example: https://github.com/purinzan/ladder-fabricator/blob/main/examples/basic.json
+
+Authors must create source circuit JSON only. Do not hand-author SVG, coordinates, wires, or derived connection JSON. Validate the AST and inspect rung text before rendering. Unsupported instructions must be reported rather than approximated. Structural validation does not certify PLC behavior or machine safety.

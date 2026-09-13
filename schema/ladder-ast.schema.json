@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://purinzan.github.io/ladder-fabricator/schema/ladder-ast.schema.json",
+  "title": "Ladder Fabricator circuit AST",
+  "description": "Authoring schema for validated MELSEC iQ-F and KEYENCE KV-X ladder diagrams.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "rungs"],
+  "properties": {
+    "schema_version": {"enum": [1, 2]},
+    "target": {"$ref": "#/$defs/target"},
+    "title": {"type": "string", "maxLength": 160},
+    "comments": {
+      "type": "object",
+      "maxProperties": 512,
+      "propertyNames": {"type": "string", "minLength": 1},
+      "additionalProperties": {"type": "string", "maxLength": 2048}
+    },
+    "rungs": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {"$ref": "#/$defs/rung"}
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": 2}}, "required": ["schema_version"]},
+      "then": {"required": ["target"]}
+    }
+  ],
+  "$defs": {
+    "target": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["vendor", "series"], "properties": {"vendor": {"const": "melsec"}, "series": {"const": "iq-f"}}},
+        {"type": "object", "additionalProperties": false, "required": ["vendor", "series"], "properties": {"vendor": {"const": "keyence"}, "series": {"const": "kv-x"}}}
+      ]
+    },
+    "rung": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "logic", "output"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,47}$"},
+        "title": {"type": "string", "maxLength": 160},
+        "logic": {"$ref": "#/$defs/logic-root"},
+        "output": {"$ref": "#/$defs/output"}
+      }
+    },
+    "contact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["device", "contact"],
+      "properties": {
+        "device": {"type": "string", "minLength": 2},
+        "contact": {"enum": ["a", "b", "rising", "falling"]}
+      }
+    },
+    "compare": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compare"],
+      "properties": {
+        "compare": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["operator", "left", "right"],
+          "properties": {
+            "operator": {"enum": ["=", "<>", "<", "<=", ">", ">="]},
+            "left": {"type": "string"},
+            "right": {"type": "string"}
+          }
+        }
+      }
+    },
+    "logic-root": {
+      "oneOf": [
+        {"$ref": "#/$defs/logic"},
+        {"type": "object", "additionalProperties": false, "required": ["inv"], "properties": {"inv": {"$ref": "#/$defs/logic"}}}
+      ]
+    },
+    "logic": {
+      "oneOf": [
+        {"type": "string", "minLength": 2},
+        {"$ref": "#/$defs/contact"},
+        {"$ref": "#/$defs/compare"},
+        {"type": "object", "additionalProperties": false, "required": ["and"], "properties": {"and": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/logic"}}}},
+        {"type": "object", "additionalProperties": false, "required": ["or"], "properties": {"or": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/logic"}}}},
+        {"type": "object", "additionalProperties": false, "required": ["not"], "properties": {"not": {"$ref": "#/$defs/logic"}}}
+      ]
+    },
+    "output": {
+      "oneOf": [
+        {"type": "object", "additionalProperties": false, "required": ["device"], "properties": {"type": {"enum": ["coil", "set", "rst", "pls", "plf"]}, "device": {"type": "string"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "setpoint", "process_value", "parameters", "destination"], "properties": {"type": {"const": "pid"}, "setpoint": {"type": "string"}, "process_value": {"type": "string"}, "parameters": {"type": "string"}, "destination": {"type": "string"}}},
+        {"type": "object", "additionalProperties": false, "required": ["type", "source", "destination"], "properties": {"type": {"const": "mov"}, "source": {"type": "string"}, "destination": {"type": "string"}}}
+      ]
+    }
+  }
+}

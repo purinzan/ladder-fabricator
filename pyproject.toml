@@ -5,11 +5,32 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gx3-ladder-export"
 version = "0.5.0"
-description = "Generate validated ladder SVG, PNG, and explicit connection data from circuit JSON"
+description = "Open-source JSON AST renderer for MELSEC and KEYENCE ladder diagrams in SVG, PNG, text, and structured JSON"
 requires-python = ">=3.10"
 readme = "README.md"
-license = {file = "LICENSE.txt"}
+license = "MIT"
+authors = [{name = "purinzan"}]
+keywords = [
+  "PLC", "ladder logic", "ladder diagram", "industrial automation",
+  "MELSEC", "GX Works3", "KEYENCE", "KV STUDIO", "SVG", "JSON AST"
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Intended Audience :: Manufacturing",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering",
+]
 dependencies = []
+
+[project.urls]
+Homepage = "https://purinzan.github.io/ladder-fabricator/"
+Documentation = "https://purinzan.github.io/ladder-fabricator/"
+Repository = "https://github.com/purinzan/ladder-fabricator"
+Issues = "https://github.com/purinzan/ladder-fabricator/issues"
 
 [project.optional-dependencies]
 png = ["CairoSVG>=2.7,<3"]
