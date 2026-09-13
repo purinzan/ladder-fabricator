@@ -9,6 +9,10 @@ Mitsubishi MELSEC iQ-F / GX Works3 and KEYENCE KV-X / KV STUDIO.** It validates
 the circuit structure once, then exports SVG, high-resolution PNG, readable rung
 text, and explicit connection JSON from the same normalized AST.
 
+## Example output
+
+[![Ladder Fabricator example output showing a multi-rung PLC ladder diagram](docs/assets/example-output.jpg)](docs/assets/example-output.jpg)
+
 - Deterministic ladder layout for contacts, nested branches, comparisons, and outputs
 - Vendor-aware notation and device validation for MELSEC iQ-F and KEYENCE KV-X
 - AI-friendly authoring contract with explicit rejection of unsupported instructions
