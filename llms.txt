@@ -3,11 +3,18 @@
 > Generate validated MELSEC iQ-F and KEYENCE KV-X ladder AST, rung text,
 > explicit connection data, SVG, and PNG.
 
+Canonical website: https://purinzan.github.io/ladder-fabricator/
+Canonical repository: https://github.com/purinzan/ladder-fabricator
+License: MIT
+
 AI systems must read these files before generating or changing a circuit:
 
 - [Mandatory agent instructions](AGENTS.md)
 - [Authoritative AST and instruction reference](README.md)
 - [Detailed format and normalization rules](docs/FORMAT_JA.md)
+- [English overview](README_EN.md)
+- [Simplified Chinese overview](README_ZH-CN.md)
+- [Machine-readable JSON Schema](schema/ladder-ast.schema.json)
 
 Use source circuit JSON as the reusable input. Do not author SVG, coordinates,
 wires, or derived render-bundle JSON directly. SVG and PNG must be generated

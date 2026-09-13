@@ -1,5 +1,28 @@
 # Ladder Fabricator
 
+[![CI](https://github.com/purinzan/ladder-fabricator/actions/workflows/ci.yml/badge.svg)](https://github.com/purinzan/ladder-fabricator/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE.txt)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](pyproject.toml)
+
+**Ladder Fabricator is an open-source JSON AST-to-ladder-diagram renderer for
+Mitsubishi MELSEC iQ-F / GX Works3 and KEYENCE KV-X / KV STUDIO.** It validates
+the circuit structure once, then exports SVG, high-resolution PNG, readable rung
+text, and explicit connection JSON from the same normalized AST.
+
+- Deterministic ladder layout for contacts, nested branches, comparisons, and outputs
+- Vendor-aware notation and device validation for MELSEC iQ-F and KEYENCE KV-X
+- AI-friendly authoring contract with explicit rejection of unsupported instructions
+- Local-only processing; circuit inputs and generated diagrams are not uploaded
+
+English: [overview and quick start](README_EN.md) ·
+简体中文: [概览与快速开始](README_ZH-CN.md) ·
+[documentation website](https://purinzan.github.io/ladder-fabricator/) ·
+[JSON Schema](schema/ladder-ast.schema.json)
+
+> Ladder Fabricator generates documentation artifacts; it does not certify PLC
+> behavior or machine safety. Verify every circuit in the official engineering
+> environment before use on physical equipment.
+
 回路の条件をJSONで記述し、MELSEC iQ-FまたはKEYENCE KV-X表記の、デバイスコメント付き
 ラダーSVG、共有しやすい高解像度PNG、論理・接続構造JSONを生成するPythonツールです。
 
@@ -445,4 +468,4 @@ sqlite3 reference/keyence/kv_reference.sqlite3 "SELECT concept_ja, gx3_json, kv_
 
 ## ライセンス
 
-本リポジトリは独自ライセンスです。利用条件は[LICENSE.txt](LICENSE.txt)を確認してください。
+本リポジトリは[MIT License](LICENSE.txt)で公開するオープンソースソフトウェアです。

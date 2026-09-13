@@ -1,0 +1,15 @@
+{
+  "@context": "https://doi.org/10.5063/schema/codemeta-2.0",
+  "@type": "SoftwareSourceCode",
+  "name": "Ladder Fabricator",
+  "description": "Open-source JSON AST renderer for MELSEC and KEYENCE ladder diagrams in SVG, PNG, text, and structured JSON.",
+  "codeRepository": "https://github.com/purinzan/ladder-fabricator",
+  "issueTracker": "https://github.com/purinzan/ladder-fabricator/issues",
+  "license": "https://spdx.org/licenses/MIT",
+  "version": "0.5.0",
+  "datePublished": "2026-09-13",
+  "programmingLanguage": "Python 3",
+  "runtimePlatform": "Python 3.10 or newer",
+  "author": {"@type": "Person", "name": "purinzan"},
+  "keywords": ["PLC", "ladder logic", "ladder diagram", "MELSEC", "GX Works3", "KEYENCE", "KV STUDIO", "SVG", "PNG", "JSON AST"]
+}

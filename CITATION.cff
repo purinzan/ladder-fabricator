@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use Ladder Fabricator, cite the software using this metadata."
+title: "Ladder Fabricator"
+type: software
+authors:
+  - name: purinzan
+repository-code: "https://github.com/purinzan/ladder-fabricator"
+url: "https://purinzan.github.io/ladder-fabricator/"
+license: MIT
+version: 0.5.0
+date-released: 2026-09-13
+keywords:
+  - PLC
+  - ladder logic
+  - industrial automation
+  - MELSEC
+  - KEYENCE
