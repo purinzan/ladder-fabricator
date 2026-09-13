@@ -6,12 +6,45 @@
 Pythonパッケージ名は`gx3-ladder-export`です。CLIは`ladder-fabricator`を使用でき、
 従来名の`gx3-ladder-export`も同じ機能の別名として残しています。
 
+## AI・自動化エージェント向け必読
+
+このREADMEを、回路作成用JSON（共通AST）の**人・AI共通の正本**とします。AIが回路を生成、
+変更、レビュー、またはSVGへ変換する場合は、作業前に少なくとも
+[AST・命令リファレンス（正本）](#ast命令リファレンス正本)、
+[AIの作成手順](#aiの作成手順)、[対応範囲](#対応範囲)を読んでください。
+
+このリポジトリには、各AI製品が自動的に読む規約ファイルからREADMEへ誘導する入口も置いています。
+入口ファイルへ仕様を複製せず、仕様変更はREADMEと実装を同じコミットで更新します。
+
+| AI／エージェント | 自動読込を狙う入口 |
+|---|---|
+| OpenAI CodexほかAGENTS.md対応エージェント | `AGENTS.md` |
+| Claude Code | `CLAUDE.md` |
+| Gemini CLI | `GEMINI.md` |
+| GitHub Copilot | `.github/copilot-instructions.md` |
+| Cursor | `.cursor/rules/ladder-fabricator.mdc`、`.cursorrules` |
+| Windsurf | `.windsurfrules` |
+| Cline | `.clinerules` |
+| Aider | `.aider.conf.yml` |
+| llms.txt対応クローラー／一般AI | `llms.txt`、`AI_INSTRUCTIONS.md` |
+
+外部AIがリポジトリ規約を無視する場合まで技術的に強制することはできません。主要製品の自動読込規約、
+ルートREADMEの冒頭、汎用入口を重ね、どの入口からでも同じ正本へ到達させています。
+
+重要な境界:
+
+- AIは依頼内容を下記ASTへ変換する。座標、配線、SVG要素は作成しない
+- 再生成可能な入力は作成用JSONであり、`--format json`の構造JSONは再入力しない
+- 表にない命令やデバイスを推測、別命令への置換、単純OUTへの縮退で表現しない
+- 必ず`--validate-only`の後に`rung-text --comments`で論理を確認してからSVGを生成する
+- 構造検証の成功はPLCの実行、安全性、CPU固有のデバイス範囲を保証しない
+
 ## 対応PLCモード
 
 | モード | 対象環境 | SVGで使う主な命令表記 |
 |---|---|---|
-| 三菱電機モード | MELSEC iQ-F / GX Works3 | OUT、SET、RST、PLS、PLF、INV |
-| KEYENCEモード | KV-X / KV STUDIO | OUT、SET、RES、DIFU、DIFD、CON |
+| 三菱電機モード | MELSEC iQ-F / GX Works3 | OUT、SET、RST、PLS、PLF、INV、比較、PID、MOV |
+| KEYENCEモード | KV-X / KV STUDIO | OUT、SET、RES、DIFU、DIFD、CON、比較、PID、MOV |
 
 同じ中間形式の論理・接続構造を使い、指定したモードに応じてデバイス検証、命令名、
 SVGの表現を切り替えます。従来の`schema_version: 1`は三菱電機モードとして扱い、
@@ -22,8 +55,8 @@ GX Works3やGX3ファイルを使わず、依頼内容から作った共通AST�
 
 ## できること
 
-- a接点・b接点・立ち上がり接点と、直列（AND）・並列（OR）・否定（NOT）を組み合わせる
-- OUT、SET、RST、立ち上がりPLS、立ち下がりPLFと、演算結果を反転するINV命令を表す
+- a接点・b接点・立ち上がり接点・立ち下がり接点と、直列（AND）・並列（OR）・否定（NOT）を組み合わせる
+- 比較、OUT、SET、RST、PLS、PLF、PID、MOVと、演算結果を反転するINV命令を表す
 - 条件構造から接点、分岐、合流、円形コイル、命令枠、母線を自動配置する
 - `X0 AND (X1 OR X2)` のような共有接点を複製せずに描く
 - デバイスコメントをSVGへ表示し、全文をSVGのtitleと構造JSONへ保持する
@@ -112,6 +145,21 @@ RES/DIFU/DIFD/CONとしてSVGと構造JSONへ出力されます。
 python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
 ```
 
+### CLI一覧
+
+| 指定 | 内容 |
+|---|---|
+| `ladder-fabricator INPUT` | SVGを標準出力 |
+| `-o PATH`／`--output PATH` | 結果をUTF-8ファイルへ保存し、親フォルダを作成 |
+| `--format svg` | SVGを生成。既定値 |
+| `--format json` | 描画・参照用の構造JSONを生成 |
+| `rung-text INPUT` | `--format rung-text`の短縮形 |
+| `--format rung-text` | 条件から出力への確認用テキストを生成 |
+| `--comments` | rung-textへ参照デバイスのコメントを追加 |
+| `--target melsec-iq-f` | 入力内のtargetを一時的にMELSEC iQ-Fへ上書き |
+| `--target keyence-kv-x` | 入力内のtargetを一時的にKEYENCE KV-Xへ上書き |
+| `--validate-only` | 作成用JSONの構造検証だけを実行 |
+
 ## AIとこのツールの役割
 
 このパッケージ自体は自然言語を解釈しません。AIまたは利用者が要求を共通ASTへ変換し、
@@ -126,34 +174,142 @@ python -m gx3_ladder_export examples/basic.json -o outputs/basic.svg
                          └→ rung-text --comments（任意の確認表示）
 ```
 
-## 入力形式
+## AST・命令リファレンス（正本）
 
-CLI入力のJSONは検証後にメモリ上の共通ASTへ変換されます。`logic`には次の形式を入れ子で指定します。
+CLI入力のJSONは検証後にメモリ上の共通ASTへ変換されます。ここにない表記は未対応です。
+より内部的な正規化規則と構造JSONについては[回路JSON v1 / v2](docs/FORMAT_JA.md)に記載しています。
 
-| JSON | 意味 | ラダー表現 |
+### 文書
+
+```json
+{
+  "schema_version": 2,
+  "target": {"vendor": "melsec", "series": "iq-f"},
+  "title": "文書名",
+  "comments": {"X0": "開始", "Y0": "運転出力"},
+  "rungs": [
+    {
+      "id": "run_output",
+      "title": "回路名",
+      "logic": "X0",
+      "output": {"type": "coil", "device": "Y0"}
+    }
+  ]
+}
+```
+
+| フィールド | 必須 | 形式と制限 |
 |---|---|---|
-| `"X0"` | X0がON | X0のa接点 |
-| `{"not": "X0"}` | X0がOFF | X0のb接点 |
-| `{"device": "X0", "contact": "rising"}` | X0のOFF→ON | 立ち上がり接点 |
-| `{"and": ["X0", "X1"]}` | 両方が成立 | 直列 |
-| `{"or": ["X0", "X1"]}` | どちらかが成立 | 並列 |
-| `{"inv": {"and": ["X0", "X1"]}}` | そこまでの演算結果を反転 | INV命令 |
-| `{"compare": {"operator": ">=", "left": "D101", "right": "D100"}}` | 左辺が右辺以上 | 比較接点 |
+| `schema_version` | 必須 | `1`または`2`。v1はMELSEC iQ-F固定 |
+| `target` | v2で必須 | 下表の`vendor`と`series`を完全一致で指定 |
+| `title` | 任意 | 文書名、160文字以内 |
+| `comments` | 任意 | デバイス名からコメントへのマップ。最大512件、各2048文字以内 |
+| `rungs` | 必須 | 1～64回路の配列 |
 
-出力の`type`は通常コイルの`coil`、保持ONの`set`、デバイスをリセットする`rst`、
-条件の立ち上がり・立ち下がりで1スキャン出力する`pls`/`plf`を指定できます。SVGではMOVなどと同じセル構造で、
-命令枠を命令セルとオペランドセルに分けます。`SET | Y0`、`RST | C0`、`PLS | M1`のように、
-対象デバイスとそのコメントを命令枠内へ表示します。
-INVはPLCの演算順序を明確にするため、`logic`の最外側だけで使用します。
+各回路の`id`は英字で開始し、英数字、`_`、`-`だけを使う48文字以内の一意な値です。
+`title`は任意の160文字以内、`logic`と`output`は必須です。未知フィールドは拒否されます。
 
-ワード制御では`pid`と`mov`を指定できます。三菱iQ-FのPIDは、目標値、測定値、
-パラメータ先頭、出力値の順で命令枠へ表示します。
+### 対象PLC
 
-[命令サンプル](examples/instructions.json)には、立ち上がり接点→SET、RST、PLS、AND結果→INV→OUTを収録しています。
-[ロードセルPID押圧制御](examples/servo_force_pid.py)は、メモリ上のASTから直接SVGを生成します。
+| target ID／指定 | 対象 | v1 | v2 |
+|---|---|---|---|
+| `melsec-iq-f`／`{"vendor":"melsec","series":"iq-f"}` | MELSEC iQ-F / GX Works3 | 既定値 | 指定可能 |
+| `keyence-kv-x`／`{"vendor":"keyence","series":"kv-x"}` | KEYENCE KV-X / KV STUDIO | 不可 | 指定可能 |
 
-複数の回路は`rungs`へ並べます。詳しい制約、正規化規則、入力上限は
-[回路JSON v1](docs/FORMAT_JA.md)を参照してください。
+保存・共有する入力にはv2と`target`を明記します。CLIの`--target`は一時的な上書き用です。
+
+### logicで使える全表記
+
+次の形は相互に入れ子にできます。ただし`inv`だけは`logic`の最外側に限定されます。
+
+| 種類 | JSON | 成立条件／表示 |
+|---|---|---|
+| a接点省略形 | `"X0"` | X0がON |
+| a接点 | `{"device":"X0","contact":"a"}` | X0がON |
+| b接点 | `{"device":"X0","contact":"b"}` | X0がOFF |
+| b接点省略形 | `{"not":"X0"}` | X0がOFF |
+| 立ち上がり接点 | `{"device":"X0","contact":"rising"}` | OFF→ONの1スキャン |
+| 立ち下がり接点 | `{"device":"X0","contact":"falling"}` | ON→OFFの1スキャン |
+| AND | `{"and":["X0","X1"]}` | 全条件成立。2項以上 |
+| OR | `{"or":["X0","X1"]}` | いずれか成立。2項以上 |
+| NOT | `{"not":{"or":["X0","X1"]}}` | 子条件全体を否定し、接点極性とAND/ORへ正規化 |
+| INV | `{"inv":{"and":["X0","X1"]}}` | 最外側だけ。MELSECはINV、KV-XはCON |
+| 比較 | `{"compare":{"operator":">=","left":"D101","right":"D100"}}` | ワードデバイス同士の比較 |
+
+比較演算子は`=`、`<>`、`<`、`<=`、`>`、`>=`です。定数との比較には未対応です。
+`not`で立ち上がり／立ち下がり接点を反転することはできません。`inv`は論理的なNOTへ
+置換されず、PLC命令として保持されます。
+
+### outputで使える全表記
+
+1回路につき出力は1つです。`coil`だけは`type`を省略でき、既定値になります。
+
+| type | 作成用JSON | MELSEC | KEYENCE | 意味 |
+|---|---|---|---|---|
+| `coil` | `{"type":"coil","device":"Y0"}` | OUT | OUT | 条件結果を通常出力 |
+| `set` | `{"type":"set","device":"M0"}` | SET | SET | 条件成立時に保持ON |
+| `rst` | `{"type":"rst","device":"M0"}` | RST | RES | ビットOFF／対応する現在値を0 |
+| `pls` | `{"type":"pls","device":"M0"}` | PLS | DIFU | 条件の不成立→成立時に1スキャン出力 |
+| `plf` | `{"type":"plf","device":"M0"}` | PLF | DIFD | 条件の成立→不成立時に1スキャン出力 |
+| `pid` | 下記 | PID | PID | SVとPVからMVを演算 |
+| `mov` | `{"type":"mov","source":"D0","destination":"D10"}` | MOV | MOV | ワード値を転送 |
+
+PIDの属性順序は目標値（SV）、測定値（PV）、パラメータ先頭、出力値（MV）です。
+
+```json
+{
+  "type": "pid",
+  "setpoint": "D100",
+  "process_value": "D101",
+  "parameters": "D200",
+  "destination": "D300"
+}
+```
+
+三菱iQ-Fではパラメータ先頭から25点を占有するため、他用途と重ならない領域を指定します。
+PIDの具体的なパラメータ値、スケーリング、周期、出力上限はこのASTでは設定・検証しません。
+
+### メーカー別に使用可能なデバイス
+
+| 用途 | MELSEC iQ-F | KEYENCE KV-X |
+|---|---|---|
+| 接点 | X、Y、M、L、B | R、B、MR、LR、CR、T、C |
+| `coil`、`set`、`pls`、`plf` | Y、M、L、B | R、B、MR、LR |
+| `rst` | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ | R、B、MR、LR、T、C、DM、EM、FM、ZF、W、TM |
+| 比較、`pid`、`mov`のワード | D、W、SD、SW、R、Z | DM、EM、FM、ZF、W、TM |
+
+MELSECのX/Y/B/SB/W/SWは16進、その他の対応デバイスは10進です。小文字とゼロ埋めは
+正規化されます。KEYENCEのR/MR/LRは末尾ビット番号00～15を検査し、B/Wは16進です。
+KV-XのR/MR/LR/T/C/DM/EM/FM/TMは先頭に`@`を付けたローカル指定も保持します。
+CPUごとのデバイス上限は検査しません。
+
+### 検証上限と拒否する入力
+
+- UTF-8（BOM可）、入力ファイル最大1 MiB
+- 1文書1～64回路、条件ノード合計512以内、条件の深さ24以内
+- `and`と`or`は2項以上。空配列、1項だけの配列は拒否
+- 重複回路ID、重複JSONキー、正規化後に重複するコメントキーは拒否
+- ラベル、ビット／桁指定、添字、間接指定、未知フィールドは拒否
+- 入力JSON自身を出力先として上書きする指定は拒否
+- エラー時は部分的なSVGを出力せず、未対応命令をOUTへ置き換えない
+
+### AIの作成手順
+
+AIは次の順序を固定して使用します。
+
+1. 依頼から対象PLC、デバイスとコメント、各回路の成立条件、出力を抽出する
+2. このREADMEの表にある作成用JSONだけでASTを作る。座標や配線は記述しない
+3. `ladder-fabricator circuit.json --validate-only`を実行する
+4. `ladder-fabricator rung-text circuit.json --comments`を実行し、依頼と条件式を照合する
+5. `ladder-fabricator circuit.json -o output.svg`でSVGを生成する
+6. 必要な場合だけ`--format json`で導出済み構造JSONを生成する
+7. 結果には「形式検証済み」と「PLC動作・実機安全性は未保証」を区別して記載する
+
+入力の意味が複数に解釈できる場合や、表にない命令が必要な場合は、推測して生成せず不足仕様を明示します。
+
+[命令サンプル](examples/instructions.json)には、立ち上がり接点、SET、RST、PLS、INVを収録しています。
+[KEYENCE例](examples/keyence-kv-x.json)にはKV-XのデバイスとRESへの変換を収録しています。
+[ロードセルPID押圧制御](examples/servo_force_pid.py)は、メモリ上のASTからPID・MOVを含むSVGを生成します。
 
 ## 生成物
 
@@ -208,15 +364,18 @@ Path("basic.svg").write_text(render_circuit(circuit), encoding="utf-8")
 | 比較 | ワードデバイス同士の`= <> < <= > >=` |
 | 出力 | 各回路に1つのOUT、SET、RST、PLS、PLF、PID、MOV（KVではRES、DIFU、DIFD） |
 | MELSEC接点デバイス | X、Y、M、L、B |
-| MELSEC OUT/SET/PLSの対象 | Y、M、L、B |
+| MELSEC OUT/SET/PLS/PLFの対象 | Y、M、L、B |
 | MELSEC RSTの対象 | X、Y、M、L、SM、F、B、SB、S、T、ST、C、D、W、SD、SW、R、Z、LC、LZ |
+| MELSEC 比較/PID/MOVの対象 | D、W、SD、SW、R、Z |
 | KEYENCE接点デバイス | R、B、MR、LR、CR、T、C |
-| KEYENCE OUT/SET/DIFUの対象 | R、B、MR、LR |
+| KEYENCE OUT/SET/DIFU/DIFDの対象 | R、B、MR、LR |
 | KEYENCE RESの対象 | R、B、MR、LR、T、C、DM、EM、FM、ZF、W、TM |
+| KEYENCE 比較/PID/MOVの対象 | DM、EM、FM、ZF、W、TM |
 | 文書 | 複数回路、回路名、デバイスコメント |
 | 出力 | SVG、論理・接続構造JSON |
 
-タイマー回路の生成、比較・データ命令、ラベル、GX3/KV STUDIOプロジェクトの取込みは未対応です。
+タイマーの計時命令、カウンタの加算命令、定数比較、MOV以外の算術・データ命令、ラベル、
+GX3/KV STUDIOプロジェクトの取込みは未対応です。ワードデバイス同士の比較、PID、MOVには対応しています。
 RSTではタイマ・カウンタの現在値やワードデバイスを0にする対象として、`T0`、`ST0`、`C0`、`D0`などを指定できます。
 未対応入力はエラーとして返し、OUTへ置き換えて表示することはありません。
 

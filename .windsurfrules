@@ -1,0 +1,4 @@
+Read AGENTS.md and README.md in full before any ladder-circuit task. README is
+the authoritative AST and instruction reference. Never invent unsupported
+syntax; validate, inspect rung-text, and only then generate SVG.
+

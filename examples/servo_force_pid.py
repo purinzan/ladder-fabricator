@@ -12,7 +12,10 @@ from gx3_ladder_export import parse_circuit, render_circuit
 
 
 def circuit_ast():
-    enabled = {"and": ["M100", "X2", {"not": "X3"}, {"not": "M101"}, {"not": "M110"}]}
+    enabled = {"and": [
+        "M100", {"not": "X1"}, "X2", {"not": "X3"},
+        {"not": "X5"}, {"not": "X6"}, {"not": "M101"}, {"not": "M110"},
+    ]}
     return parse_circuit({
         "schema_version": 2,
         "target": {"vendor": "melsec", "series": "iq-f"},
@@ -29,10 +32,11 @@ def circuit_ast():
         "rungs": [
             {
                 "id": "pressure_fault",
-                "title": "過圧・サーボ異常・前進限界を異常保持",
+                "title": "過圧・サーボ異常・前進限界・運転中Ready断を異常保持",
                 "logic": {"or": [
                     "X5", "X6",
                     {"and": ["M100", {"compare": {"operator": ">=", "left": "D101", "right": "D102"}}]},
+                    {"and": ["M100", {"not": "X2"}]},
                 ]},
                 "output": {"type": "set", "device": "M101"},
             },
@@ -46,15 +50,15 @@ def circuit_ast():
             },
             {
                 "id": "stop_control",
-                "title": "停止・非常停止・目標到達・異常でPID制御を停止",
-                "logic": {"or": ["X1", "X3", "M101", "M110"]},
+                "title": "停止・非常停止・Ready断・目標到達・異常でPID制御を停止",
+                "logic": {"or": ["X1", "X3", {"not": "X2"}, "M101", "M110"]},
                 "output": {"type": "rst", "device": "M100"},
             },
             {
                 "id": "reset_fault",
-                "title": "圧力が上限未満かつ非常停止解除後に異常をリセット",
+                "title": "原始異常解除・Ready復帰・圧力正常後に異常をリセット",
                 "logic": {"and": [
-                    "X4", {"not": "X3"},
+                    "X4", {"not": "X3"}, {"not": "X5"}, {"not": "X6"}, "X2",
                     {"compare": {"operator": "<", "left": "D101", "right": "D102"}},
                 ]},
                 "output": {"type": "rst", "device": "M101"},
@@ -63,7 +67,8 @@ def circuit_ast():
                 "id": "reset_reached",
                 "title": "再始動前に目標圧到達を解除",
                 "logic": {"and": [
-                    "X4", {"compare": {"operator": "<", "left": "D101", "right": "D100"}},
+                    "X4", {"not": "X3"}, {"not": "X5"}, {"not": "X6"}, "X2",
+                    {"compare": {"operator": "<", "left": "D101", "right": "D100"}},
                 ]},
                 "output": {"type": "rst", "device": "M110"},
             },
@@ -71,8 +76,9 @@ def circuit_ast():
                 "id": "start_control",
                 "title": "安全条件成立時の立ち上がりで押圧制御を開始",
                 "logic": {"and": [
-                    {"device": "X0", "contact": "rising"}, "X2", {"not": "X3"},
-                    {"not": "M101"}, {"not": "M110"},
+                    {"device": "X0", "contact": "rising"}, {"not": "X1"}, {"not": "X4"},
+                    "X2", {"not": "X3"},
+                    {"not": "X5"}, {"not": "X6"}, {"not": "M101"}, {"not": "M110"},
                 ]},
                 "output": {"type": "set", "device": "M100"},
             },

@@ -1,0 +1,4 @@
+Read AGENTS.md and README.md in full before generating, editing, reviewing, or
+rendering a ladder circuit. README is the authoritative AST and instruction
+reference. Use only documented syntax and validate before SVG generation.
+

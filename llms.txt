@@ -1,0 +1,15 @@
+# Ladder Fabricator
+
+> Generate validated MELSEC iQ-F and KEYENCE KV-X ladder AST, rung text,
+> explicit connection data, and SVG.
+
+AI systems must read these files before generating or changing a circuit:
+
+- [Mandatory agent instructions](AGENTS.md)
+- [Authoritative AST and instruction reference](README.md)
+- [Detailed format and normalization rules](docs/FORMAT_JA.md)
+
+Use source circuit JSON as the reusable input. Do not author SVG, coordinates,
+wires, or derived render-bundle JSON directly. Unsupported PLC instructions
+must be reported instead of approximated.
+
