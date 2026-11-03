@@ -2,15 +2,47 @@
 from __future__ import annotations
 
 import math
+from xml.etree import ElementTree as ET
 
 from .layout import build_bundle
 from .model import Circuit
-from .svg import render_svg
+from .svg import GX_THEME, KEYENCE_THEME, render_svg
 
 
 DEFAULT_PNG_SCALE = 2.0
 MAX_PNG_SCALE = 4.0
 MAX_PNG_PIXELS = 80_000_000
+
+
+def _png_svg(bundle: dict) -> str:
+    """Resolve a usable family for CairoSVG's single-family text renderer.
+
+    Keep the portable SVG's fallback list unchanged. Probe the actual visible
+    characters through Cairo so a missing first family does not hide Japanese
+    even when a later family is installed.
+    """
+    import cairocffi as cairo
+
+    svg = render_svg(bundle)
+    text = "".join(n.text or "" for n in ET.fromstring(svg).iter()
+                   if n.tag == "{http://www.w3.org/2000/svg}text")
+    sample = "".join(dict.fromkeys(text))
+    if not sample:
+        return svg
+    theme = KEYENCE_THEME if bundle["target"]["id"] == "keyence-kv-x" else GX_THEME
+    families = theme["font"]
+    best, coverage = "", -1
+    for item in families.split(","):
+        family = item.strip(' "')
+        font = cairo.ScaledFont(cairo.ToyFontFace(family), cairo.Matrix(xx=12, yy=12),
+                                cairo.Matrix(), cairo.FontOptions())
+        glyphs = font.text_to_glyphs(0, 0, sample, False)
+        covered = sum(index != 0 for index, _x, _y in glyphs)
+        if covered > coverage:
+            best, coverage = family, covered
+        if all(index != 0 for index, _x, _y in glyphs):
+            break
+    return svg.replace(families, f'"{best}"')
 
 
 def render_png(circuit: Circuit, *, scale: float = DEFAULT_PNG_SCALE) -> bytes:
@@ -34,7 +66,7 @@ def render_png(circuit: Circuit, *, scale: float = DEFAULT_PNG_SCALE) -> bytes:
             "install with: python -m pip install 'gx3-ladder-export[png]'"
         ) from exc
     return cairosvg.svg2png(
-        bytestring=render_svg(bundle).encode("utf-8"),
+        bytestring=_png_svg(bundle).encode("utf-8"),
         scale=float(scale),
     )
 

@@ -6,6 +6,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 from gx3_ladder_export import build_bundle, parse_circuit, render_png
 
@@ -34,6 +35,22 @@ def png_size(data: bytes) -> tuple[int, int]:
 
 
 class PngOutputTests(unittest.TestCase):
+    @unittest.skipUnless(HAS_CAIROSVG, "requires gx3-ladder-export[png]")
+    def test_png_uses_a_later_family_when_the_first_lacks_japanese(self):
+        import cairosvg
+        class ProbeFont:
+            def __init__(self, face, *_args):
+                self.family = face.get_family()
+            def text_to_glyphs(self, _x, _y, text, _clusters):
+                return [(0 if ord(ch) > 127 and self.family == "Noto Sans CJK JP" else 1, 0, 0) for ch in text]
+        with patch("cairocffi.ScaledFont", ProbeFont), patch.object(cairosvg, "svg2png", return_value=b"PNG") as raster:
+            render_png(parse_circuit(document()))
+        svg = raster.call_args.kwargs["bytestring"].decode("utf-8")
+        self.assertIn('font-family:"Hiragino Sans"', svg)
+        self.assertNotIn('font-family:"Noto Sans CJK JP"', svg)
+        from gx3_ladder_export import render_circuit
+        self.assertIn('font-family:"Noto Sans CJK JP","Hiragino Sans"', render_circuit(parse_circuit(document())))
+
     def test_invalid_scale_is_rejected_without_optional_dependency(self):
         circuit = parse_circuit(document())
         for scale in (0, 0.1, 5, float("inf"), float("nan"), True):

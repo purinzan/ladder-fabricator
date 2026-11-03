@@ -18,17 +18,25 @@ HEADER_H = 44
 FOOTER_H = 22
 CONTACT_HALF = 17
 COIL_HALF = 12
-# GX Works-style instruction boxes use one cell for the opcode and one per
-# operand. Current authoring instructions have one operand, so they span two.
+# Compatibility value for a one-operand instruction. Other footprints depend
+# on the ordered operand count, shared by placement, ports and SVG boxes.
 INSTRUCTION_HALF = CELL_W - 5
 INVERTER_HALF = 24
+
+
+def instruction_half(operands) -> float:
+    return CELL_W * (1 + len(operands)) / 2 - 5
+
+
+def operand_comments(operands, comments):
+    return [{"operand": operand, "comment": comments.get(operand, "")} for operand in operands]
 
 
 def extent(expr: Expr) -> tuple[int, int]:
     if expr.op == "contact":
         return 1, 1
     if expr.op == "predicate":
-        return 2, 1
+        return 1 + len(expr.operands), 1
     if expr.op == "inv":
         width, height = extent(expr.args[0])
         return width + 1, height
@@ -61,11 +69,9 @@ class Builder:
     def port(self, identifier: str, side: str) -> list[float]:
         node = self.nodes[identifier]
         point = self.positions[identifier]
-        half = {
+        half = instruction_half(node["operands"]) if node["kind"] in ("instruction", "predicate") else {
             "contact": CONTACT_HALF,
             "coil": COIL_HALF,
-            "instruction": INSTRUCTION_HALF,
-            "predicate": INSTRUCTION_HALF,
             "inverter": INVERTER_HALF,
         }.get(node["kind"], 0)
         return [point["x"] + (half if side == "out" else -half), point["y"]]
@@ -95,8 +101,9 @@ class Builder:
                                   comment=self.comments.get(expr.device, ""))
             return identifier, identifier
         if expr.op == "predicate":
-            identifier = self.add(expr.id, "predicate", x + 1, y,
-                                  opcode=expr.opcode, operands=list(expr.operands), comment="")
+            identifier = self.add(expr.id, "predicate", x + (1 + len(expr.operands)) / 2, y,
+                                  opcode=expr.opcode, operands=list(expr.operands), comment="",
+                                  operand_comments=operand_comments(expr.operands, self.comments))
             return identifier, identifier
         if expr.op == "inv":
             child = expr.args[0]
@@ -132,23 +139,25 @@ def build_bundle(circuit: Circuit) -> dict:
     """Derived graph + SVG geometry + conditions; never a second editable truth."""
     profile = profile_from_id(circuit.target)
     rung_widths = [extent(rung.logic)[0] for rung in circuit.rungs]
-    has_instruction = any(rung.output_type != "coil" for rung in circuit.rungs)
-    columns = max(rung_widths) + (4 if has_instruction else 3)
+    output_cells = [1 if rung.output_type == "coil" else 1 + len(rung.operands or (rung.output,))
+                    for rung in circuit.rungs]
+    columns = max(width + cells + 2 for width, cells in zip(rung_widths, output_cells))
     offset = 0
     rungs = []
     comments = dict(circuit.comments)
-    for rung in circuit.rungs:
+    for rung, cells in zip(circuit.rungs, output_cells):
         _, height = extent(rung.logic)
         builder = Builder(comments, offset, profile)
         left = builder.add(rung.id + ":left", "left_rail", 0, 0)
         entry, exit_node = builder.place(rung.logic, 1, 0)
         opcode = profile.output_opcodes[rung.output_type]
         output_kind = "coil" if rung.output_type == "coil" else "instruction"
-        output_x = columns - (1 if output_kind == "instruction" else 0.5)
+        output_x = columns - cells / 2
         operands = list(rung.operands) or [rung.output]
         coil = builder.add(rung.id + ":output", output_kind, output_x, 0,
                            device=rung.output, opcode=opcode, operands=operands,
-                           comment=comments.get(rung.output, ""))
+                           comment=comments.get(rung.output, ""),
+                           operand_comments=operand_comments(operands, comments))
         right = builder.add(rung.id + ":right", "right_rail", columns, 0)
         builder.connect(left, entry)
         builder.connect(exit_node, coil)

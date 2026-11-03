@@ -13,7 +13,7 @@ from gx3_ladder_export import (
     ValidationError, build_bundle, parse_circuit, render_rung_text,
     render_circuit, render_svg, rung_text_records,
 )
-from gx3_ladder_export.layout import CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+from gx3_ladder_export.layout import CONTACT_HALF, COIL_HALF, INVERTER_HALF
 from gx3_ladder_export.svg import BOX_PX, GRID, GRID_PX, INK, WIRE_PX
 from gx3_ladder_export.model import MAX_DEPTH, MAX_NODES, MAX_RUNGS
 
@@ -164,9 +164,10 @@ class CircuitTests(unittest.TestCase):
             for end, name in [(0, "from"), (-1, "to")]:
                 node = nodes[edge[name]["node"]]
                 pos = positions[node["id"]]
-                half = {"contact": CONTACT_HALF, "coil": COIL_HALF,
-                        "instruction": INSTRUCTION_HALF,
-                        "inverter": INVERTER_HALF}.get(node["kind"], 0)
+                half = (104 * (1 + len(node["operands"])) / 2 - 5
+                        if node["kind"] in ("instruction", "predicate") else
+                        {"contact": CONTACT_HALF, "coil": COIL_HALF,
+                         "inverter": INVERTER_HALF}.get(node["kind"], 0))
                 self.assertEqual(path["points"][end], [pos["x"] + (half if end == 0 else -half), pos["y"]])
             for a, b in zip(path["points"], path["points"][1:]):
                 self.assertTrue(a[0] == b[0] or a[1] == b[1])
@@ -383,9 +384,11 @@ class CircuitTests(unittest.TestCase):
         svg = render_circuit(circuit)
         ET.fromstring(svg)
         self.assertIn(">PID</text>", svg)
-        self.assertIn(">D100 D101</text>", svg)
-        self.assertIn(">D200 D300</text>", svg)
+        for operand in ("D100", "D101", "D200", "D300"):
+            self.assertIn(f">{operand}</text>", svg)
         self.assertIn(">MOV</text>", svg)
+        for rung in bundle["rungs"]:
+            self.check_geometry(rung)
         negated = parse_circuit(document({"not": {
             "compare": {"operator": ">=", "left": "D101", "right": "D100"}
         }}))
