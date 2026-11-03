@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import html
-from .layout import CELL_H, CELL_W, CONTACT_HALF, COIL_HALF, INSTRUCTION_HALF, INVERTER_HALF
+import unicodedata
+from .layout import CELL_H, CELL_W, CONTACT_HALF, COIL_HALF, INVERTER_HALF, instruction_half
 
 
 # GX Works3 ladder-canvas reference profile. Stroke widths are CSS pixels and
@@ -41,8 +42,26 @@ def short(value: str, maximum: int) -> str:
 def comment_lines(value: str) -> list[str]:
     # Full text is kept in JSON and <title>. Make truncation visible.
     value = " ".join(value.split())
-    width = 7
-    return [value[:width], short(value[width:], width)] if len(value) > width else [value]
+    def width(ch):
+        if unicodedata.combining(ch):
+            return 0
+        return 2 if unicodedata.east_asian_width(ch) in "WFA" else 1
+    lines, at = [], 0
+    for _ in range(2):
+        start, used = at, 0
+        while at < len(value) and used + width(value[at]) <= 12:
+            used += width(value[at])
+            at += 1
+        if at > start:
+            lines.append(value[start:at])
+        if at == len(value):
+            break
+    if at < len(value) and lines:
+        tail = lines[-1]
+        while sum(width(ch) for ch in tail) + width("…") > 12:
+            tail = tail[:-1]
+        lines[-1] = tail + "…"
+    return lines
 
 
 def render_svg(bundle: dict) -> str:
@@ -103,7 +122,9 @@ def render_svg(bundle: dict) -> str:
             # action is not mistaken for an ordinary output coil.
             instruction_text = (f'{node["opcode"]} {" ".join(node["operands"])}'
                                 if node["kind"] in ("instruction", "predicate") else node["device"])
-            lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(instruction_text)} {esc(node["comment"])}</title>')
+            description = ("\n".join(f'{row["operand"]}: {row["comment"]}' for row in node["operand_comments"] if row["comment"])
+                           if node["kind"] in ("instruction", "predicate") else node["comment"])
+            lines.append(f'<g data-node="{esc(node["id"])}"><title>{esc(instruction_text)} {esc(description)}</title>')
             if node["kind"] == "contact":
                 for contact_x in (x - CONTACT_HALF, x + CONTACT_HALF):
                     lines.append(f'<line class="symbol" x1="{contact_x}" y1="{y - 13}" x2="{contact_x}" y2="{y + 13}"/>')
@@ -117,32 +138,32 @@ def render_svg(bundle: dict) -> str:
                     lines.append(f'<polyline class="mark" points="{x - 5},{y + 3} {x},{y + 9} {x + 5},{y + 3}"/>')
             elif node["kind"] == "coil":
                 if keyence:
-                    lines.append(f'<path class="symbol" d="M {x - 3} {y - COIL_HALF} Q {x - COIL_HALF} {y} {x - 3} {y + COIL_HALF}"/>')
-                    lines.append(f'<path class="symbol" d="M {x + 3} {y - COIL_HALF} Q {x + COIL_HALF} {y} {x + 3} {y + COIL_HALF}"/>')
+                    # A quadratic reaches only halfway to its control point at
+                    # mid-height. Choose controls so the curve meets each port.
+                    lines.append(f'<path class="symbol" d="M {x - 3} {y - COIL_HALF} Q {x - (2 * COIL_HALF - 3)} {y} {x - 3} {y + COIL_HALF}"/>')
+                    lines.append(f'<path class="symbol" d="M {x + 3} {y - COIL_HALF} Q {x + (2 * COIL_HALF - 3)} {y} {x + 3} {y + COIL_HALF}"/>')
                 else:
                     lines.append(f'<circle class="symbol" cx="{x}" cy="{y}" r="{COIL_HALF}"/>')
             else:
-                box_left = x - INSTRUCTION_HALF
-                operand_lines = [" ".join(node["operands"])]
+                half = instruction_half(node["operands"])
+                box_left = x - half
                 box_height = 58
-                if len(node["operands"]) > 2:
-                    operand_lines = [" ".join(node["operands"][:2]), " ".join(node["operands"][2:])]
-                    box_height = 76
                 box_top = y - box_height / 2
-                box_width = INSTRUCTION_HALF * 2
+                box_width = half * 2
                 opcode_width = CELL_W - 10
-                operand_x = box_left + opcode_width + (box_width - opcode_width) / 2
                 lines.append(f'<rect class="instruction-body" x="{box_left}" y="{box_top}" width="{box_width}" height="{box_height}"/>')
                 lines.append(f'<rect class="opcode-cell" x="{box_left}" y="{box_top}" width="{opcode_width}" height="{box_height}"/>')
                 lines.append(f'<rect class="instruction-box" x="{box_left}" y="{box_top}" width="{box_width}" height="{box_height}"/>')
                 lines.append(f'<line class="box-separator" x1="{box_left + opcode_width}" y1="{box_top}" x2="{box_left + opcode_width}" y2="{box_top + box_height}"/>')
                 lines.append(f'<text class="opcode" x="{box_left + opcode_width / 2}" y="{y + 5}">{esc(node["opcode"])}</text>')
-                for index, value in enumerate(operand_lines):
-                    lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16 + index * 14}">{esc(value)}</text>')
-                comment_y = box_top + (52 if len(operand_lines) > 1 else 37)
-                for index, value in enumerate(comment_lines(node["comment"])):
-                    if value:
-                        lines.append(f'<text class="comment" x="{operand_x}" y="{comment_y + index * 13}">{esc(value)}</text>')
+                for index, row in enumerate(node["operand_comments"]):
+                    operand_left = box_left + opcode_width + CELL_W * index
+                    if index:
+                        lines.append(f'<line class="box-separator" x1="{operand_left}" y1="{box_top}" x2="{operand_left}" y2="{box_top + box_height}"/>')
+                    operand_x = operand_left + CELL_W / 2
+                    lines.append(f'<text class="operand" x="{operand_x}" y="{box_top + 16}">{esc(row["operand"])}</text>')
+                    for line_index, value in enumerate(comment_lines(row["comment"])):
+                        lines.append(f'<text class="comment" x="{operand_x}" y="{box_top + 35 + line_index * 13}">{esc(value)}</text>')
             label_offset = 30 if node["kind"] in ("coil", "instruction", "predicate") else 24
             comment_offset = 40 if node["kind"] in ("coil", "instruction", "predicate") else 30
             if node["kind"] not in ("instruction", "predicate"):

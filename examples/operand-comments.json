@@ -1,0 +1,31 @@
+{
+  "schema_version": 2,
+  "target": {"vendor": "melsec", "series": "iq-f"},
+  "title": "Synthetic operand comment alignment",
+  "comments": {
+    "M0": "StartCondition",
+    "D0": "SourceValue",
+    "D10": "DestinationValue",
+    "D100": "目標値ＳＶ",
+    "D101": "測定値ＰＶ",
+    "D300": "OutputValue"
+  },
+  "rungs": [
+    {
+      "id": "move",
+      "logic": "M0",
+      "output": {"type": "mov", "source": "D0", "destination": "D10"}
+    },
+    {
+      "id": "pid",
+      "logic": {"compare": {"operator": ">=", "left": "D101", "right": "D100"}},
+      "output": {
+        "type": "pid",
+        "setpoint": "D100",
+        "process_value": "D101",
+        "parameters": "D200",
+        "destination": "D300"
+      }
+    }
+  ]
+}
